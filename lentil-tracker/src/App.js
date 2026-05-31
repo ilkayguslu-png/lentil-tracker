@@ -271,10 +271,10 @@ export default function App() {
       if (data.status === "success") {
         setSheetRows(data.rows);
       } else {
-        setSheetError("Could not load data from Google Sheets.");
+        setSheetError("Script error: " + (data.message || JSON.stringify(data)));
       }
-    } catch {
-      setSheetError("Could not connect to Google Sheets.");
+    } catch (err) {
+      setSheetError("Fetch error: " + err.message);
     }
     setSheetLoading(false);
   }, []);
