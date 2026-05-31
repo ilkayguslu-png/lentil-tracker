@@ -2,8 +2,6 @@ import { useState, useRef, useCallback } from "react";
 
 const SHEET_ID = "17_Em_JGAvpkxiQvzm0TKS6gXaNk7rjVlx4LEt2FrZT4";
 
-const DEFAULT_SALARY = 200; // per day for Sat & Sun
-
 const MARKETS = [
   { name: "Grove St — Monday",             day: "Monday"    },
   { name: "Maplewood FM",                  day: "Monday"    },
@@ -229,8 +227,7 @@ export default function App() {
   const [entryMode, setEntryMode] = useState("manual");
   const [weekDate, setWeekDate] = useState(getMonday());
   const [weekBonus, setWeekBonus] = useState(0);
-  const [salaryRate, setSalaryRate] = useState(DEFAULT_SALARY);
-  const [manualSalary, setManualSalary] = useState(0); // manual salary entry (June-Dec)
+  const [w2Salary, setW2Salary] = useState(0);
   const [manualData, setManualData] = useState(emptyData());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -257,8 +254,7 @@ export default function App() {
   const totalRevenue    = totalContainers * price;
   const totalTips       = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.tips||0),0);
   const totalBonus      = Number(weekBonus)||0;
-  const autoSalary      = (Number(salaryRate)||0) * 2;
-  const totalSalary     = autoSalary + (Number(manualSalary)||0);
+  const totalSalary     = Number(w2Salary)||0;
   const totalCombined   = totalRevenue + totalTips + totalBonus + totalSalary;
 
   const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbx9gT3MsqATaCCus40G-tCWgp2LfVe1JhCHIEmfu0we6XpNjE708zmqQUiIXc6fKZ9yCw/exec";
@@ -297,8 +293,7 @@ export default function App() {
       return `${weekDate},"${m.name}","${m.day}",${c},$${rev.toFixed(2)},$${t.toFixed(2)},$0.00,$${(rev+t).toFixed(2)},"${scannedOn}"`;
     });
     if (totalBonus>0) marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
-    if (autoSalary>0) marketRows.push(`${weekDate},"Salary — Sat & Sun (Auto)","—",0,$0.00,$0.00,$${autoSalary.toFixed(2)},$${autoSalary.toFixed(2)},"${scannedOn}"`);
-    if ((Number(manualSalary)||0)>0) marketRows.push(`${weekDate},"Salary — Manual Entry","—",0,$0.00,$0.00,$${(Number(manualSalary)).toFixed(2)},$${(Number(manualSalary)).toFixed(2)},"${scannedOn}"`);
+    if (totalSalary>0) marketRows.push(`${weekDate},"W2 Salary","—",0,$0.00,$0.00,$${totalSalary.toFixed(2)},$${totalSalary.toFixed(2)},"${scannedOn}"`);
 
     try {
       const ok = await saveToSheets(marketRows.join("\n"));
@@ -424,14 +419,7 @@ export default function App() {
                   <input type="number" className="setting-input" value={price} min={1} step={0.5}
                     onChange={e=>setPrice(e.target.value===""?8:Number(e.target.value))}/>
                 </div>
-                <div className="setting-row">
-                  <div>
-                    <div className="setting-label">Daily Salary (Sat & Sun)</div>
-                    <div className="setting-note">Auto-added every week — $200 × 2 days</div>
-                  </div>
-                  <input type="number" className="setting-input" value={salaryRate} min={0} step={10}
-                    onChange={e=>setSalaryRate(e.target.value===""?200:Number(e.target.value))}/>
-                </div>
+
               </div>
 
               <div className="settings-card">
