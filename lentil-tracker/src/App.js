@@ -2,6 +2,8 @@ import { useState, useRef, useCallback } from "react";
 
 const SHEET_ID = "17_Em_JGAvpkxiQvzm0TKS6gXaNk7rjVlx4LEt2FrZT4";
 
+const DEFAULT_SALARY = 200; // per day for Sat & Sun
+
 const MARKETS = [
   { name: "Grove St — Monday",             day: "Monday"    },
   { name: "Maplewood FM",                  day: "Monday"    },
@@ -227,6 +229,8 @@ export default function App() {
   const [entryMode, setEntryMode] = useState("manual");
   const [weekDate, setWeekDate] = useState(getMonday());
   const [weekBonus, setWeekBonus] = useState(0);
+  const [salaryRate, setSalaryRate] = useState(DEFAULT_SALARY);
+  const [manualSalary, setManualSalary] = useState(0); // manual salary entry (June-Dec)
   const [manualData, setManualData] = useState(emptyData());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -291,6 +295,8 @@ export default function App() {
       return `${weekDate},"${m.name}","${m.day}",${c},$${rev.toFixed(2)},$${t.toFixed(2)},$0.00,$${(rev+t).toFixed(2)},"${scannedOn}"`;
     });
     if (totalBonus>0) marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
+    if (autoSalary>0) marketRows.push(`${weekDate},"Salary — Sat & Sun (Auto)","—",0,$0.00,$0.00,$${autoSalary.toFixed(2)},$${autoSalary.toFixed(2)},"${scannedOn}"`);
+    if ((Number(manualSalary)||0)>0) marketRows.push(`${weekDate},"Salary — Manual Entry","—",0,$0.00,$0.00,$${(Number(manualSalary)).toFixed(2)},$${(Number(manualSalary)).toFixed(2)},"${scannedOn}"`);
 
     try {
       const ok = await saveToSheets(marketRows.join("\n"));
@@ -416,6 +422,14 @@ export default function App() {
                   <input type="number" className="setting-input" value={price} min={1} step={0.5}
                     onChange={e=>setPrice(e.target.value===""?8:Number(e.target.value))}/>
                 </div>
+                <div className="setting-row">
+                  <div>
+                    <div className="setting-label">Daily Salary (Sat & Sun)</div>
+                    <div className="setting-note">Auto-added every week — $200 × 2 days</div>
+                  </div>
+                  <input type="number" className="setting-input" value={salaryRate} min={0} step={10}
+                    onChange={e=>setSalaryRate(e.target.value===""?200:Number(e.target.value))}/>
+                </div>
               </div>
 
               <div className="settings-card">
@@ -498,11 +512,12 @@ export default function App() {
                     <input type="number" className="bonus-input" min={0} step={0.5} value={weekBonus||""} placeholder="$0.00" onChange={e=>setWeekBonus(e.target.value===""?0:Number(e.target.value))}/>
                   </div>
 
-                  <div className="totals-row">
+                  <div className="totals-row" style={{gridTemplateColumns:"repeat(6,1fr)"}}>
                     <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
                     <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
                     <div className="total-item"><div className="total-lbl">Tips</div><div className="total-val tv-t">{fmt(totalTips)}</div></div>
                     <div className="total-item"><div className="total-lbl">Bonus</div><div className="total-val tv-bo">{fmt(totalBonus)}</div></div>
+                    <div className="total-item"><div className="total-lbl">Salary</div><div className="total-val" style={{color:"var(--accent2)"}}>{fmt(totalSalary)}</div></div>
                     <div className="total-item"><div className="total-lbl">Total</div><div className="total-val tv-to">{fmt(totalCombined)}</div></div>
                   </div>
 
