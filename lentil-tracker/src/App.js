@@ -257,7 +257,9 @@ export default function App() {
   const totalRevenue    = totalContainers * price;
   const totalTips       = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.tips||0),0);
   const totalBonus      = Number(weekBonus)||0;
-  const totalCombined   = totalRevenue + totalTips + totalBonus;
+  const autoSalary      = (Number(salaryRate)||0) * 2;
+  const totalSalary     = autoSalary + (Number(manualSalary)||0);
+  const totalCombined   = totalRevenue + totalTips + totalBonus + totalSalary;
 
   const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbx9gT3MsqATaCCus40G-tCWgp2LfVe1JhCHIEmfu0we6XpNjE708zmqQUiIXc6fKZ9yCw/exec";
 
