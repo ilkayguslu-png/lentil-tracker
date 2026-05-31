@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 
-const SHEET_ID = "1O57Bw6VWjUHSkOvVIOpY5n0DqHj_U0hQgoQBMnZAIf4";
+const SHEET_ID = "17_Em_JGAvpkxiQvzm0TKS6gXaNk7rjVlx4LEt2FrZT4";
 
 const MARKETS = [
   { name: "Grove St — Monday",             day: "Monday"    },
@@ -255,25 +255,29 @@ export default function App() {
   const totalBonus      = Number(weekBonus)||0;
   const totalCombined   = totalRevenue + totalTips + totalBonus;
 
+  const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbx9gT3MsqATaCCus40G-tCWgp2LfVe1JhCHIEmfu0we6XpNjE708zmqQUiIXc6fKZ9yCw/exec";
+
   const saveToSheets = async (csvRows) => {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "x-api-key": process.env.REACT_APP_ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model:"claude-3-5-sonnet-20241022", max_tokens:1000,
-        messages:[{role:"user",content:`Append to Google Sheet ID ${SHEET_ID}. Download CSV, add rows at bottom, re-upload. No headers.\nColumns: Week Starting, Market, Day, Containers, Revenue, Tips, Bonus, Total, Saved On\nRows:\n${csvRows}`}],
-        mcp_servers:[{type:"url",url:"https://drivemcp.googleapis.com/mcp/v1",name:"gdrive"}]
-      })
+    // Parse CSV rows into arrays for the webhook
+    const rows = csvRows.split("\n").map(row => {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < row.length; i++) {
+        if (row[i] === '"') { inQuotes = !inQuotes; }
+        else if (row[i] === "," && !inQuotes) { result.push(current); current = ""; }
+        else { current += row[i]; }
+      }
+      result.push(current);
+      return result;
+    });
+    const res = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ rows })
     });
     const d = await res.json();
-    const txt = d.content.filter(i=>i.type==="text").map(i=>i.text).join(" ").toLowerCase();
-    const tool = d.content.filter(i=>i.type==="mcp_tool_result");
-    return tool.length>0||txt.includes("success")||txt.includes("upload");
+    return d.status === "success";
   };
 
   const saveManual = async () => {
