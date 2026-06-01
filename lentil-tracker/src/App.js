@@ -202,6 +202,7 @@ const styles = `
 
 export default function App() {
   const [tab, setTab] = useState("entry");
+  const [scriptUrl, setScriptUrl] = useState(() => localStorage.getItem("lentil_script_url") || "");
   const [price, setPrice] = useState(8);
   const [weekDate, setWeekDate] = useState(getMonday());
   const [weekBonus, setWeekBonus] = useState(0);
@@ -231,25 +232,15 @@ export default function App() {
   const totalBonus      = Number(weekBonus)||0;
   const totalCombined   = totalRevenue + totalTips + totalBonus;
 
-  const saveToSheets = async (csvRows, sheetTab) => {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "x-api-key": process.env.REACT_APP_ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model:"claude-3-5-sonnet-20241022", max_tokens:1000,
-        messages:[{role:"user",content:`Append to Google Sheet ID ${SHEET_ID}, sheet tab named "${sheetTab}". Add rows at bottom, no headers.\n${csvRows}`}],
-        mcp_servers:[{type:"url",url:"https://drivemcp.googleapis.com/mcp/v1",name:"gdrive"}]
-      })
+  const saveToSheets = async (rows, sheetTab) => {
+    if (!scriptUrl) throw new Error("Script URL not set — go to Settings.");
+    await fetch(scriptUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ sheetId: SHEET_ID, tab: sheetTab, rows }),
     });
-    const d = await res.json();
-    const txt = d.content.filter(i=>i.type==="text").map(i=>i.text).join(" ").toLowerCase();
-    const tool = d.content.filter(i=>i.type==="mcp_tool_result");
-    return tool.length>0||txt.includes("success")||txt.includes("upload");
+    return true;
   };
 
   const saveManual = async () => {
@@ -260,13 +251,12 @@ export default function App() {
 
     const marketRows = active.map(m => {
       const c=manualData[m.name].containers||0, t=manualData[m.name].tips||0, rev=c*price;
-      return `${weekDate},"${m.name}","${m.day}",${c},$${rev.toFixed(2)},$${t.toFixed(2)},$0.00,$${(rev+t).toFixed(2)},"${scannedOn}"`;
+      return [weekDate, m.name, m.day, c, rev.toFixed(2), t.toFixed(2), "0.00", (rev+t).toFixed(2), scannedOn];
     });
-    if (totalBonus>0) marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
+    if (totalBonus>0) marketRows.push([weekDate, "Weekly Bonus", "—", 0, "0.00", "0.00", totalBonus.toFixed(2), totalBonus.toFixed(2), scannedOn]);
 
     try {
-      const csvRows = `Columns: Week Starting, Market, Day, Containers, Revenue, Tips, Bonus, Total, Saved On\nRows:\n${marketRows.join("\n")}`;
-      const ok = await saveToSheets(csvRows, "Sales");
+      const ok = await saveToSheets(marketRows, "Sales");
       if (ok) {
         setSaved(true);
         const newEntries = active.map(m => ({
@@ -279,7 +269,7 @@ export default function App() {
         if (totalBonus>0) newEntries[0].bonus = totalBonus;
         setLog(prev => [...newEntries, ...prev]);
       } else setStatus({msg:"Something went wrong. Try again.",type:"error"});
-    } catch { setStatus({msg:"Could not connect. Try again.",type:"error"}); }
+    } catch(err) { setStatus({msg: err.message.includes("Script URL") ? err.message : "Could not connect. Try again.",type:"error"}); }
     setSaving(false);
   };
 
@@ -290,16 +280,15 @@ export default function App() {
     if (!amount || amount <= 0) { setSalaryStatus({msg:"Please enter a salary amount.",type:"error"}); return; }
     setSalarySaving(true); setSalarySaved(false); setSalaryStatus(null);
     const savedOn = new Date().toLocaleString();
-    const csvRows = `Columns: Date, Market, Amount, Saved On\nRows:\n${salaryDate},"${salaryMarket}",$${amount.toFixed(2)},"${savedOn}"`;
     try {
-      const ok = await saveToSheets(csvRows, "Salary");
+      const ok = await saveToSheets([[salaryDate, salaryMarket, amount.toFixed(2), savedOn]], "Salary");
       if (ok) {
         setSalarySaved(true);
         setSalaryLog(prev => [{date: salaryDate, market: salaryMarket, amount, savedOn}, ...prev]);
         setSalaryStatus({msg:"Salary entry saved!",type:"ok"});
         setSalaryAmount(""); setSalaryMarket(HUSBAND_MARKETS[0]); setSalaryDate(getToday());
       } else setSalaryStatus({msg:"Something went wrong. Try again.",type:"error"});
-    } catch { setSalaryStatus({msg:"Could not connect. Try again.",type:"error"}); }
+    } catch(err) { setSalaryStatus({msg: err.message.includes("Script URL") ? err.message : "Could not connect. Try again.",type:"error"}); }
     setSalarySaving(false);
   };
 
@@ -371,12 +360,44 @@ export default function App() {
               </div>
 
               <div className="settings-card">
-                <div className="settings-title">Google Sheet</div>
-                <div style={{fontSize:"0.85rem",color:"var(--muted)",marginBottom:10}}>Sales save to the "Sales" tab. Salary entries save to the "Salary" tab.</div>
-                <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer"
-                  style={{display:"inline-flex",alignItems:"center",gap:6,color:"var(--accent2)",fontSize:"0.85rem",textDecoration:"none",fontFamily:"Inconsolata,monospace"}}>
-                  📊 Open Google Sheet →
-                </a>
+                <div className="settings-title">Google Sheet Connection</div>
+                <div style={{fontSize:"0.85rem",color:"var(--muted)",marginBottom:14}}>
+                  Paste your Apps Script web app URL below. Sales go to the "Sales" tab, salary to "Salary".
+                </div>
+                <div className="salary-field">
+                  <span className="input-label">Apps Script URL</span>
+                  <input type="text" className="salary-input" value={scriptUrl}
+                    placeholder="https://script.google.com/macros/s/…/exec"
+                    onChange={e=>{ setScriptUrl(e.target.value); localStorage.setItem("lentil_script_url", e.target.value); }}/>
+                </div>
+                {scriptUrl
+                  ? <div className="status ok" style={{marginBottom:0}}>✓ URL saved — ready to sync</div>
+                  : <div className="status error" style={{marginBottom:0}}>⚠ No URL set — saving is disabled</div>
+                }
+                <hr style={{border:"none",borderTop:"1px solid var(--border)",margin:"16px 0"}}/>
+                <div style={{fontSize:"0.78rem",color:"var(--muted)",marginBottom:8,fontFamily:"Inconsolata,monospace",letterSpacing:"0.06em",textTransform:"uppercase"}}>One-time setup</div>
+                <ol style={{fontSize:"0.82rem",color:"var(--muted)",paddingLeft:18,lineHeight:1.8}}>
+                  <li>Open your Google Sheet → <strong style={{color:"var(--text)"}}>Extensions → Apps Script</strong></li>
+                  <li>Delete any existing code, paste this:</li>
+                </ol>
+                <pre style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 12px",fontSize:"0.72rem",color:"var(--text)",overflowX:"auto",margin:"8px 0 10px",lineHeight:1.6,fontFamily:"Inconsolata,monospace"}}>{`function doPost(e) {
+  var d = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.openById(d.sheetId);
+  var sheet = ss.getSheetByName(d.tab) || ss.insertSheet(d.tab);
+  d.rows.forEach(function(row) { sheet.appendRow(row); });
+  return ContentService.createTextOutput("ok");
+}`}</pre>
+                <ol start={3} style={{fontSize:"0.82rem",color:"var(--muted)",paddingLeft:18,lineHeight:1.8}}>
+                  <li>Click <strong style={{color:"var(--text)"}}>Deploy → New deployment</strong> → type: Web app</li>
+                  <li>Set <strong style={{color:"var(--text)"}}>Execute as: Me</strong>, <strong style={{color:"var(--text)"}}>Who has access: Anyone</strong></li>
+                  <li>Copy the URL and paste it above</li>
+                </ol>
+                <div style={{marginTop:12}}>
+                  <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer"
+                    style={{display:"inline-flex",alignItems:"center",gap:6,color:"var(--accent2)",fontSize:"0.85rem",textDecoration:"none",fontFamily:"Inconsolata,monospace"}}>
+                    📊 Open Google Sheet →
+                  </a>
+                </div>
               </div>
             </>
           )}
