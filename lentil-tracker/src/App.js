@@ -2,6 +2,14 @@ import { useState } from "react";
 
 const SHEET_ID = "1O57Bw6VWjUHSkOvVIOpY5n0DqHj_U0hQgoQBMnZAIf4";
 
+const HUSBAND_MARKETS = [
+  "Maplewood FM",
+  "Riverdale FM",
+  "South Orange FM",
+  "67th Street Flea Market",
+  "Murray Hill FM",
+];
+
 const MARKETS = [
   { name: "Grove St — Monday",             day: "Monday"    },
   { name: "Maplewood FM",                  day: "Monday"    },
@@ -38,6 +46,7 @@ const getMonday = () => {
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff)).toISOString().slice(0,10);
 };
+const getToday = () => new Date().toISOString().slice(0,10);
 const emptyData = () => Object.fromEntries(MARKETS.map(m => [m.name, { containers: 0, tips: 0 }]));
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
 
@@ -87,10 +96,6 @@ const styles = `
     padding:7px 12px; color:var(--accent); font-family:'Inconsolata',monospace; font-size:1rem;
     font-weight:600; outline:none; width:100px; text-align:center; }
   .setting-input:focus { border-color:var(--accent); }
-  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
-  .info-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; }
-  .info-box-label { font-family:'Inconsolata',monospace; font-size:0.65rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:4px; }
-  .info-box-value { font-size:0.9rem; font-weight:600; color:var(--text); }
 
   /* ── ENTRY FORM TAB ── */
   .week-bar { display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
@@ -98,11 +103,6 @@ const styles = `
   .week-input { background:var(--surface); border:1px solid var(--border); border-radius:8px;
     padding:8px 12px; color:var(--text); font-family:'Inconsolata',monospace; font-size:0.88rem; outline:none; }
   .week-input:focus { border-color:var(--accent); }
-  .photo-tab-bar { display:flex; gap:8px; margin-bottom:16px; }
-  .photo-tab { flex:1; padding:9px; border-radius:9px; border:1px solid var(--border);
-    background:var(--surface); color:var(--muted); font-family:'Source Sans 3',sans-serif;
-    font-size:0.82rem; font-weight:600; cursor:pointer; transition:all 0.2s; text-align:center; }
-  .photo-tab.active { background:var(--accent); color:#0F1117; border-color:var(--accent); }
   .day-section { margin-bottom:14px; }
   .day-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .day-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
@@ -135,6 +135,12 @@ const styles = `
   .success-box { background:rgba(92,184,122,0.1); border:1px solid rgba(92,184,122,0.3); border-radius:10px; padding:14px; text-align:center; margin-top:12px; }
   .success-box p { color:var(--green); font-size:0.88rem; margin-bottom:6px; }
   .success-box a { color:var(--accent2); font-size:0.82rem; }
+  .status { padding:9px 13px; border-radius:8px; font-family:'Inconsolata',monospace; font-size:0.8rem; margin-bottom:12px; }
+  .status.ok    { background:rgba(92,184,122,0.1); border:1px solid rgba(92,184,122,0.25); color:var(--green); }
+  .status.error { background:rgba(224,92,92,0.1);  border:1px solid rgba(224,92,92,0.25);  color:var(--red); }
+  .status.info  { background:rgba(91,143,212,0.1); border:1px solid rgba(91,143,212,0.25); color:var(--accent2); }
+  .spinner { width:15px; height:15px; border:2px solid rgba(15,17,23,0.3); border-top-color:#0F1117; border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
   /* ── SUMMARY SECTION ── */
   .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
@@ -174,48 +180,21 @@ const styles = `
   .log-sum-row { display:flex; justify-content:space-between; padding:5px 0; font-size:0.85rem; border-bottom:1px solid var(--border); }
   .log-sum-row:last-child { border-bottom:none; font-weight:600; color:var(--accent); }
 
-  /* ── PHOTO MODE ── */
-  .drop-zone { border:2px dashed var(--border); border-radius:12px; padding:36px 20px;
-    text-align:center; cursor:pointer; transition:all 0.2s; background:var(--surface); position:relative; }
-  .drop-zone:hover { border-color:var(--accent); background:rgba(232,164,74,0.04); }
-  .drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
-  .drop-icon { font-size:2.4rem; margin-bottom:8px; display:block; }
-  .drop-text { font-size:0.92rem; color:var(--text); margin-bottom:3px; font-weight:600; }
-  .drop-sub { font-size:0.75rem; color:var(--muted); font-family:'Inconsolata',monospace; }
-  .preview-img { width:100%; max-height:240px; object-fit:contain; border-radius:10px; border:1px solid var(--border); margin-bottom:12px; }
-  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    padding:10px 20px; border-radius:9px; font-family:'Source Sans 3',sans-serif;
-    font-size:0.88rem; font-weight:600; cursor:pointer; transition:all 0.18s; border:none; }
-  .btn-accent { background:var(--accent); color:#0F1117; width:100%; }
-  .btn-accent:disabled { background:#5A4A2A; color:#8A7A5A; cursor:not-allowed; }
-  .btn-outline { background:transparent; border:1px solid var(--border); color:var(--muted); }
-  .btn-green { background:var(--green); color:#0F1117; width:100%; }
-  .btn-green:disabled { background:#2A5A3A; color:#5A8A6A; cursor:not-allowed; }
-  .btn-sm { padding:6px 12px; font-size:0.8rem; }
-  .action-row { display:flex; gap:8px; align-items:center; }
-  .flex1 { flex:1; }
-  .status { padding:9px 13px; border-radius:8px; font-family:'Inconsolata',monospace; font-size:0.8rem; margin-bottom:12px; }
-  .status.ok    { background:rgba(92,184,122,0.1); border:1px solid rgba(92,184,122,0.25); color:var(--green); }
-  .status.error { background:rgba(224,92,92,0.1);  border:1px solid rgba(224,92,92,0.25);  color:var(--red); }
-  .status.info  { background:rgba(91,143,212,0.1); border:1px solid rgba(91,143,212,0.25); color:var(--accent2); }
-  .raw-note { background:var(--surface2); border:1px solid var(--border); border-radius:8px;
-    padding:12px; font-family:'Inconsolata',monospace; font-size:0.78rem; color:var(--muted);
-    white-space:pre-wrap; line-height:1.6; margin-bottom:12px; }
-  .micro-label { font-family:'Inconsolata',monospace; font-size:0.63rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:5px; }
-  .scan-table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:0.85rem; }
-  .scan-table th { background:var(--surface2); color:var(--muted); padding:8px 10px;
-    text-align:left; font-family:'Inconsolata',monospace; font-size:0.65rem; letter-spacing:0.08em; border-bottom:1px solid var(--border); }
-  .scan-table td { padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
-  .scan-table tr:last-child td { border-bottom:none; }
-  .scan-table input, .scan-table select { background:var(--surface2); border:1px solid var(--border);
-    border-radius:6px; padding:5px 7px; font-family:'Inconsolata',monospace; font-size:0.8rem;
-    color:var(--text); width:100%; outline:none; }
-  .del-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:0.95rem; padding:2px 5px; }
-  .del-btn:hover { color:var(--red); }
-  .add-row { background:none; border:1px dashed var(--border); border-radius:7px; color:var(--muted);
-    padding:6px; font-size:0.8rem; cursor:pointer; width:100%; margin-bottom:12px; font-family:'Source Sans 3',sans-serif; }
-  .spinner { width:15px; height:15px; border:2px solid rgba(15,17,23,0.3); border-top-color:#0F1117; border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+  /* ── SALARY TAB ── */
+  .salary-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .salary-title { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--accent2); margin-bottom:14px; }
+  .salary-field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+  .salary-input { background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+    padding:8px 12px; color:var(--text); font-family:'Inconsolata',monospace; font-size:0.95rem; outline:none; width:100%; }
+  .salary-input:focus { border-color:var(--accent2); }
+  .salary-amount { color:var(--accent2); font-weight:600; }
+  .salary-save-btn { width:100%; padding:13px; background:var(--accent2); color:#fff;
+    border:none; border-radius:10px; font-family:'Playfair Display',serif; font-size:1rem;
+    font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; }
+  .salary-save-btn:hover { background:#6B9FE4; }
+  .salary-save-btn:disabled { background:#1E2A40; color:#4A5A7A; cursor:not-allowed; }
+
+  /* ── SHARED ── */
   .section-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
   .section-title { font-family:'Playfair Display',serif; font-size:0.95rem; font-weight:700; color:var(--accent); margin-bottom:14px; }
   .divider { border:none; border-top:1px solid var(--border); margin:16px 0; }
@@ -232,6 +211,15 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [log, setLog] = useState([]);
 
+  // Salary state
+  const [salaryDate, setSalaryDate] = useState(getToday());
+  const [salaryAmount, setSalaryAmount] = useState("");
+  const [salaryMarket, setSalaryMarket] = useState(HUSBAND_MARKETS[0]);
+  const [salarySaving, setSalarySaving] = useState(false);
+  const [salarySaved, setSalarySaved] = useState(false);
+  const [salaryStatus, setSalaryStatus] = useState(null);
+  const [salaryLog, setSalaryLog] = useState([]);
+
   const updateManual = (market, field, val) => {
     setSaved(false);
     setManualData(prev => ({ ...prev, [market]: { ...prev[market], [field]: val===""?0:Number(val)||0 } }));
@@ -243,7 +231,7 @@ export default function App() {
   const totalBonus      = Number(weekBonus)||0;
   const totalCombined   = totalRevenue + totalTips + totalBonus;
 
-  const saveToSheets = async (csvRows) => {
+  const saveToSheets = async (csvRows, sheetTab) => {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{
@@ -254,7 +242,7 @@ export default function App() {
       },
       body: JSON.stringify({
         model:"claude-3-5-sonnet-20241022", max_tokens:1000,
-        messages:[{role:"user",content:`Append to Google Sheet ID ${SHEET_ID}. Download CSV, add rows at bottom, re-upload. No headers.\nColumns: Week Starting, Market, Day, Containers, Revenue, Tips, Bonus, Total, Saved On\nRows:\n${csvRows}`}],
+        messages:[{role:"user",content:`Append to Google Sheet ID ${SHEET_ID}, sheet tab named "${sheetTab}". Add rows at bottom, no headers.\n${csvRows}`}],
         mcp_servers:[{type:"url",url:"https://drivemcp.googleapis.com/mcp/v1",name:"gdrive"}]
       })
     });
@@ -277,10 +265,10 @@ export default function App() {
     if (totalBonus>0) marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
 
     try {
-      const ok = await saveToSheets(marketRows.join("\n"));
+      const csvRows = `Columns: Week Starting, Market, Day, Containers, Revenue, Tips, Bonus, Total, Saved On\nRows:\n${marketRows.join("\n")}`;
+      const ok = await saveToSheets(csvRows, "Sales");
       if (ok) {
         setSaved(true);
-        // Add to local log
         const newEntries = active.map(m => ({
           date: weekDate, market: m.name, day: m.day,
           containers: manualData[m.name].containers||0,
@@ -297,16 +285,39 @@ export default function App() {
 
   const resetManual = () => { setManualData(emptyData()); setSaved(false); setStatus(null); setWeekDate(getMonday()); setWeekBonus(0); };
 
+  const saveSalary = async () => {
+    const amount = Number(salaryAmount);
+    if (!amount || amount <= 0) { setSalaryStatus({msg:"Please enter a salary amount.",type:"error"}); return; }
+    setSalarySaving(true); setSalarySaved(false); setSalaryStatus(null);
+    const savedOn = new Date().toLocaleString();
+    const csvRows = `Columns: Date, Market, Amount, Saved On\nRows:\n${salaryDate},"${salaryMarket}",$${amount.toFixed(2)},"${savedOn}"`;
+    try {
+      const ok = await saveToSheets(csvRows, "Salary");
+      if (ok) {
+        setSalarySaved(true);
+        setSalaryLog(prev => [{date: salaryDate, market: salaryMarket, amount, savedOn}, ...prev]);
+        setSalaryStatus({msg:"Salary entry saved!",type:"ok"});
+        setSalaryAmount(""); setSalaryMarket(HUSBAND_MARKETS[0]); setSalaryDate(getToday());
+      } else setSalaryStatus({msg:"Something went wrong. Try again.",type:"error"});
+    } catch { setSalaryStatus({msg:"Could not connect. Try again.",type:"error"}); }
+    setSalarySaving(false);
+  };
+
   const dayBadgeClass = (day) => {
     const map = {Monday:"mon",Tuesday:"tue",Wednesday:"wed",Thursday:"thu",Saturday:"sat",Sunday:"sun",Store:"store","—":"bonus"};
     return `badge badge-${map[day]||"mon"}`;
   };
 
-  // Log totals
+  // Sales log totals
   const logTotal = log.reduce((s,r)=>s+(r.revenue||0)+(r.tips||0)+(r.bonus||0),0);
   const logContainers = log.reduce((s,r)=>s+(r.containers||0),0);
   const logTips = log.reduce((s,r)=>s+(r.tips||0),0);
   const logBonus = log.reduce((s,r)=>s+(r.bonus||0),0);
+
+  // Salary totals — estimate annual based on average daily × 260 working days
+  const salarySessionTotal = salaryLog.reduce((s,r)=>s+(r.amount||0),0);
+  const salaryAvgDaily = salaryLog.length > 0 ? salarySessionTotal / salaryLog.length : 0;
+  const salaryEstYear = salaryAvgDaily * 260;
 
   return (
     <>
@@ -322,7 +333,7 @@ export default function App() {
 
         {/* Main Nav */}
         <div className="main-nav">
-          {[["entry","✏️ Entry Form"],["log","📋 Sales Log"],["summary","📊 Summary"],["settings","⚙️ Settings"]].map(([key,label])=>(
+          {[["entry","✏️ Entry Form"],["salary","💼 Salary"],["log","📋 Sales Log"],["summary","📊 Summary"],["settings","⚙️ Settings"]].map(([key,label])=>(
             <button key={key} className={`nav-tab${tab===key?" active":""}`} onClick={()=>setTab(key)}>{label}</button>
           ))}
         </div>
@@ -361,7 +372,7 @@ export default function App() {
 
               <div className="settings-card">
                 <div className="settings-title">Google Sheet</div>
-                <div style={{fontSize:"0.85rem",color:"var(--muted)",marginBottom:10}}>All data saves to your live Google Sheet automatically.</div>
+                <div style={{fontSize:"0.85rem",color:"var(--muted)",marginBottom:10}}>Sales save to the "Sales" tab. Salary entries save to the "Salary" tab.</div>
                 <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer"
                   style={{display:"inline-flex",alignItems:"center",gap:6,color:"var(--accent2)",fontSize:"0.85rem",textDecoration:"none",fontFamily:"Inconsolata,monospace"}}>
                   📊 Open Google Sheet →
@@ -381,56 +392,111 @@ export default function App() {
               </div>
 
               {DAYS_ORDER.map(day=>(
-                    <div className="day-section" key={day}>
-                      <div className="day-header">
-                        <div className="day-dot" style={{background:DAY_COLORS[day]}}/>
-                        <div className="day-name">{day==="Store"?"🏪 Store":day}</div>
-                        <div className="day-line"/>
-                      </div>
-                      {byDay[day].map(market=>{
-                        const c=manualData[market.name]?.containers||0,t=manualData[market.name]?.tips||0,rev=c*price;
-                        return (
-                          <div className="market-card" key={market.name}>
-                            <div className="market-name">{market.name}</div>
-                            <div className="market-inputs">
-                              <div className="input-group"><span className="input-label">Containers</span>
-                                <input type="number" className="market-input" min={0} value={c||""} placeholder="0" onChange={e=>updateManual(market.name,"containers",e.target.value)}/>
-                              </div>
-                              <div className="input-group"><span className="input-label">Revenue</span>
-                                <div className="market-rev">{fmt(rev)}</div>
-                              </div>
-                              <div className="input-group"><span className="input-label">Tips ($)</span>
-                                <input type="number" className="market-input tip-input" min={0} step={0.5} value={t||""} placeholder="0.00" onChange={e=>updateManual(market.name,"tips",e.target.value)}/>
-                              </div>
-                              <div className="input-group"><span className="input-label">Total</span>
-                                <div className="market-rev" style={{color:"var(--accent)"}}>{fmt(rev+t)}</div>
-                              </div>
-                            </div>
+                <div className="day-section" key={day}>
+                  <div className="day-header">
+                    <div className="day-dot" style={{background:DAY_COLORS[day]}}/>
+                    <div className="day-name">{day==="Store"?"🏪 Store":day}</div>
+                    <div className="day-line"/>
+                  </div>
+                  {byDay[day].map(market=>{
+                    const c=manualData[market.name]?.containers||0,t=manualData[market.name]?.tips||0,rev=c*price;
+                    return (
+                      <div className="market-card" key={market.name}>
+                        <div className="market-name">{market.name}</div>
+                        <div className="market-inputs">
+                          <div className="input-group"><span className="input-label">Containers</span>
+                            <input type="number" className="market-input" min={0} value={c||""} placeholder="0" onChange={e=>updateManual(market.name,"containers",e.target.value)}/>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                          <div className="input-group"><span className="input-label">Revenue</span>
+                            <div className="market-rev">{fmt(rev)}</div>
+                          </div>
+                          <div className="input-group"><span className="input-label">Tips ($)</span>
+                            <input type="number" className="market-input tip-input" min={0} step={0.5} value={t||""} placeholder="0.00" onChange={e=>updateManual(market.name,"tips",e.target.value)}/>
+                          </div>
+                          <div className="input-group"><span className="input-label">Total</span>
+                            <div className="market-rev" style={{color:"var(--accent)"}}>{fmt(rev+t)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
 
-                  <div className="bonus-row">
-                    <span className="bonus-label">⭐ Weekly Bonus</span>
-                    <input type="number" className="bonus-input" min={0} step={0.5} value={weekBonus||""} placeholder="$0.00" onChange={e=>setWeekBonus(e.target.value===""?0:Number(e.target.value))}/>
+              <div className="bonus-row">
+                <span className="bonus-label">⭐ Weekly Bonus</span>
+                <input type="number" className="bonus-input" min={0} step={0.5} value={weekBonus||""} placeholder="$0.00" onChange={e=>setWeekBonus(e.target.value===""?0:Number(e.target.value))}/>
+              </div>
+
+              <div className="totals-row">
+                <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
+                <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
+                <div className="total-item"><div className="total-lbl">Tips</div><div className="total-val tv-t">{fmt(totalTips)}</div></div>
+                <div className="total-item"><div className="total-lbl">Bonus</div><div className="total-val tv-bo">{fmt(totalBonus)}</div></div>
+                <div className="total-item"><div className="total-lbl">Total</div><div className="total-val tv-to">{fmt(totalCombined)}</div></div>
+              </div>
+
+              {!saved
+                ?<button className="save-btn" onClick={saveManual} disabled={saving}>{saving?<><span className="spinner"/>Saving...</>:"💾 Save to Google Sheets"}</button>
+                :<div className="success-box"><p>✓ Saved to your live sheet!</p><a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">Open Google Sheet →</a></div>
+              }
+              {status&&<div className={`status ${status.type}`} style={{marginTop:10}}>{status.msg}</div>}
+              <button className="reset-btn" onClick={resetManual}>Clear &amp; start a new week</button>
+            </>
+          )}
+
+          {/* ══ SALARY ════════════════════════════════════════════════════════ */}
+          {tab==="salary"&&(
+            <>
+              <div className="salary-card">
+                <div className="salary-title">💼 Huseyin's Daily Salary</div>
+                <div className="salary-field">
+                  <span className="input-label">Date</span>
+                  <input type="date" className="salary-input" value={salaryDate} onChange={e=>{setSalaryDate(e.target.value); setSalarySaved(false);}}/>
+                </div>
+                <div className="salary-field">
+                  <span className="input-label">Amount ($)</span>
+                  <input type="number" className="salary-input salary-amount" min={0} step={0.5} value={salaryAmount} placeholder="0.00"
+                    onChange={e=>{setSalaryAmount(e.target.value); setSalarySaved(false);}}/>
+                </div>
+                <div className="salary-field">
+                  <span className="input-label">Market</span>
+                  <select className="salary-input" value={salaryMarket} onChange={e=>{setSalaryMarket(e.target.value); setSalarySaved(false);}}>
+                    {HUSBAND_MARKETS.map(m=><option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                {salaryStatus&&<div className={`status ${salaryStatus.type}`}>{salaryStatus.msg}</div>}
+                {!salarySaved
+                  ?<button className="salary-save-btn" onClick={saveSalary} disabled={salarySaving}>{salarySaving?<><span className="spinner" style={{borderTopColor:"#fff"}}/>Saving...</>:"💾 Save to Google Sheets"}</button>
+                  :<div className="success-box"><p>✓ Saved to Salary sheet!</p><a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">Open Google Sheet →</a></div>
+                }
+              </div>
+
+              {salaryLog.length > 0 && (
+                <div className="salary-card">
+                  <div className="salary-title">This Session</div>
+                  <div style={{overflowX:"auto"}}>
+                    <table className="log-table">
+                      <thead><tr><th>Date</th><th>Market</th><th>Amount</th></tr></thead>
+                      <tbody>
+                        {salaryLog.map((r,i)=>(
+                          <tr key={i}>
+                            <td style={{fontFamily:"Inconsolata,monospace",fontSize:"0.78rem"}}>{fmtDate(r.date)}</td>
+                            <td style={{fontSize:"0.8rem",color:"var(--text)"}}>{r.market}</td>
+                            <td style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)",fontWeight:600}}>{fmt(r.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-
-                  <div className="totals-row">
-                    <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
-                    <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
-                    <div className="total-item"><div className="total-lbl">Tips</div><div className="total-val tv-t">{fmt(totalTips)}</div></div>
-                    <div className="total-item"><div className="total-lbl">Bonus</div><div className="total-val tv-bo">{fmt(totalBonus)}</div></div>
-                    <div className="total-item"><div className="total-lbl">Total</div><div className="total-val tv-to">{fmt(totalCombined)}</div></div>
+                  <div className="log-summary" style={{marginTop:12}}>
+                    <div className="log-sum-row"><span>Entries this session</span><span style={{fontFamily:"Inconsolata,monospace"}}>{salaryLog.length}</span></div>
+                    <div className="log-sum-row"><span>Session Total</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)"}}>{fmt(salarySessionTotal)}</span></div>
+                    <div className="log-sum-row"><span>Avg Daily</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)"}}>{fmt(salaryAvgDaily)}</span></div>
+                    <div className="log-sum-row"><span>Est. Annual (×260 days)</span><span style={{fontFamily:"Inconsolata,monospace"}}>{fmt(salaryEstYear)}</span></div>
                   </div>
-
-                  {!saved
-                    ?<button className="save-btn" onClick={saveManual} disabled={saving}>{saving?<><span className="spinner"/>Saving...</>:"💾 Save to Google Sheets"}</button>
-                    :<div className="success-box"><p>✓ Saved to your live sheet!</p><a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">Open Google Sheet →</a></div>
-                  }
-                  {status&&<div className={`status ${status.type}`} style={{marginTop:10}}>{status.msg}</div>}
-                  <button className="reset-btn" onClick={resetManual}>Clear &amp; start a new week</button>
+                </div>
+              )}
             </>
           )}
 
@@ -480,7 +546,7 @@ export default function App() {
           {tab==="summary"&&(
             <>
               <div className="section-card">
-                <div className="section-title">This Week's Estimate</div>
+                <div className="section-title">This Week's Market Sales</div>
                 <div className="totals-row" style={{marginBottom:0,borderBottom:"none",paddingBottom:0}}>
                   <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
                   <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
@@ -491,14 +557,53 @@ export default function App() {
               </div>
 
               <div className="section-card">
-                <div className="section-title">Revenue Projection</div>
+                <div className="section-title">Market Revenue Projection</div>
                 <div className="summary-grid">
                   <div className="summary-box week"><div className="summary-period">This Week</div><div className="summary-amount">{fmt(totalCombined)}</div><div className="summary-sub">{totalContainers} boxes</div></div>
                   <div className="summary-box month"><div className="summary-period">Est. Month</div><div className="summary-amount">{fmt(totalCombined*4)}</div><div className="summary-sub">×4 weeks</div></div>
                   <div className="summary-box year"><div className="summary-period">Est. Year</div><div className="summary-amount">{fmt(totalCombined*52)}</div><div className="summary-sub">×52 weeks</div></div>
                 </div>
-                <div style={{fontSize:"0.72rem",color:"var(--muted)",fontFamily:"Inconsolata,monospace",textAlign:"center"}}>
-                  * Monthly and yearly figures are estimates based on this week's numbers
+              </div>
+
+              <div className="section-card">
+                <div className="section-title" style={{color:"var(--accent2)"}}>💼 Huseyin's Salary</div>
+                {salaryLog.length === 0
+                  ? <div style={{fontSize:"0.85rem",color:"var(--muted)",padding:"8px 0"}}>No salary entries yet. Add them in the Salary tab.</div>
+                  : <>
+                      <div className="summary-grid">
+                        <div className="summary-box week" style={{background:"rgba(91,143,212,0.08)",border:"1px solid rgba(91,143,212,0.2)"}}>
+                          <div className="summary-period">Avg Daily</div>
+                          <div className="summary-amount" style={{color:"var(--accent2)"}}>{fmt(salaryAvgDaily)}</div>
+                          <div className="summary-sub">{salaryLog.length} {salaryLog.length===1?"entry":"entries"}</div>
+                        </div>
+                        <div className="summary-box month" style={{background:"rgba(91,143,212,0.06)",border:"1px solid rgba(91,143,212,0.15)"}}>
+                          <div className="summary-period">Est. Month</div>
+                          <div className="summary-amount" style={{color:"var(--accent2)"}}>{fmt(salaryAvgDaily*22)}</div>
+                          <div className="summary-sub">×22 work days</div>
+                        </div>
+                        <div className="summary-box year" style={{background:"rgba(91,143,212,0.05)",border:"1px solid rgba(91,143,212,0.12)"}}>
+                          <div className="summary-period">Est. Year</div>
+                          <div className="summary-amount" style={{color:"var(--accent2)"}}>{fmt(salaryEstYear)}</div>
+                          <div className="summary-sub">×260 work days</div>
+                        </div>
+                      </div>
+                    </>
+                }
+              </div>
+
+              <div className="section-card" style={{borderColor:"rgba(232,164,74,0.3)"}}>
+                <div className="section-title">Combined Annual Estimate</div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border)",fontSize:"0.88rem"}}>
+                  <span style={{color:"var(--muted)"}}>Market Sales (×52 weeks)</span>
+                  <span style={{fontFamily:"Inconsolata,monospace",color:"var(--green)"}}>{fmt(totalCombined*52)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border)",fontSize:"0.88rem"}}>
+                  <span style={{color:"var(--muted)"}}>Huseyin's Salary (×260 days)</span>
+                  <span style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)"}}>{fmt(salaryEstYear)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",fontSize:"1rem",fontWeight:700,color:"var(--accent)"}}>
+                  <span>Total Household</span>
+                  <span style={{fontFamily:"Inconsolata,monospace"}}>{fmt(totalCombined*52 + salaryEstYear)}</span>
                 </div>
               </div>
 
