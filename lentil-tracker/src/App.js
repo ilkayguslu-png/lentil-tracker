@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-const SHEET_ID   = "17_Em_JGAvpkxiQvzm0TKS6gXaNk7rjVlx4LEt2FrZT4";
-const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbx9gT3MsqATaCCus40G-tCWgp2LfVe1JhCHIEmfu0we6XpNjE708zmqQUiIXc6fKZ9yCw/exec";
+import { useState } from "react";
+
+const SHEET_ID = "1O57Bw6VWjUHSkOvVIOpY5n0DqHj_U0hQgoQBMnZAIf4";
+
 const MARKETS = [
   { name: "Grove St — Monday",             day: "Monday"    },
   { name: "Maplewood FM",                  day: "Monday"    },
@@ -20,470 +21,293 @@ const MARKETS = [
   { name: "Nutley FM",                     day: "Sunday"    },
   { name: "Pickles & Olives Etc. (Store)", day: "Store"     },
 ];
+
 const DAY_COLORS = {
-  Monday:"#4A90D9", Tuesday:"#E67E3A", Wednesday:"#7CB87A",
-  Thursday:"#C06BBF", Saturday:"#E8B84B", Sunday:"#E05C5C", Store:"#48A999",
+  Monday: "#4A90D9", Tuesday: "#E67E3A", Wednesday: "#7CB87A",
+  Thursday: "#C06BBF", Saturday: "#E8B84B", Sunday: "#E05C5C",
+  Store: "#48A999",
 };
 const DAYS_ORDER = ["Monday","Tuesday","Wednesday","Thursday","Saturday","Sunday","Store"];
-const byDay = DAYS_ORDER.reduce((acc,day)=>{ acc[day]=MARKETS.filter(m=>m.day===day); return acc; },{});
-const fmt     = (n) => `$${Number(n).toFixed(2)}`;
-const fmtDate = (d) => d ? new Date(d+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
+const byDay = DAYS_ORDER.reduce((acc, day) => {
+  acc[day] = MARKETS.filter(m => m.day === day); return acc;
+}, {});
+
+const fmt = (n) => `$${Number(n).toFixed(2)}`;
 const getMonday = () => {
-  const d=new Date(), day=d.getDay();
-  const diff=d.getDate()-day+(day===0?-6:1);
+  const d = new Date(), day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff)).toISOString().slice(0,10);
 };
-const emptyData = () => Object.fromEntries(MARKETS.map(m=>[m.name,{containers:0,tips:0}]));
+const emptyData = () => Object.fromEntries(MARKETS.map(m => [m.name, { containers: 0, tips: 0 }]));
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@300;400;600&family=Inconsolata:wght@400;600&display=swap');
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-  :root{
-    --bg:#0F1117;--surface:#181C27;--surface2:#1E2433;
-    --border:#2A2F42;--accent:#E8A44A;--accent2:#5B8FD4;
-    --text:#E8E4DC;--muted:#6B7080;--green:#5CB87A;
-    --red:#E05C5C;--purple:#C06BBF;--teal:#48A999;
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0F1117; --surface: #181C27; --surface2: #1E2433;
+    --border: #2A2F42; --accent: #E8A44A; --accent2: #5B8FD4;
+    --text: #E8E4DC; --muted: #6B7080; --green: #5CB87A;
+    --red: #E05C5C; --purple: #C06BBF; --teal: #48A999;
   }
-  body{background:var(--bg);color:var(--text);font-family:'Source Sans 3',sans-serif;}
-  .app{min-height:100vh;background:var(--bg);padding-bottom:60px;}
+  body { background: var(--bg); color: var(--text); font-family: 'Source Sans 3', sans-serif; }
+  .app { min-height: 100vh; background: var(--bg); padding-bottom: 60px; }
+
   /* Hero */
-  .hero{background:linear-gradient(135deg,#0F1117 0%,#1A1F30 50%,#0F1117 100%);
-    border-bottom:1px solid var(--border);padding:24px 20px 16px;text-align:center;}
-  .hero-eyebrow{font-family:'Inconsolata',monospace;font-size:0.7rem;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:4px;}
-  .hero h1{font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:900;color:var(--text);line-height:1.1;margin-bottom:2px;}
-  .hero h1 span{color:var(--accent);}
-  .hero-sub{font-size:0.78rem;color:var(--muted);}
-  .sheet-pill{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:4px 12px;
-    background:rgba(91,143,212,0.12);border:1px solid rgba(91,143,212,0.3);border-radius:20px;
-    font-family:'Inconsolata',monospace;font-size:0.7rem;color:var(--accent2);text-decoration:none;}
-  /* Nav */
-  .main-nav{display:flex;max-width:720px;margin:0 auto;border-bottom:1px solid var(--border);overflow-x:auto;}
-  .main-nav::-webkit-scrollbar{display:none;}
-  .nav-tab{flex:none;padding:12px 18px;font-family:'Inconsolata',monospace;font-size:0.75rem;
-    letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);cursor:pointer;
-    border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;
-    white-space:nowrap;transition:all 0.2s;}
-  .nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-  .nav-tab:hover:not(.active){color:var(--text);}
-  .content{max-width:720px;margin:0 auto;padding:20px 16px;}
-  /* Settings */
-  .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
-  .settings-title{font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:14px;}
-  .setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
-  .setting-row:last-child{border-bottom:none;}
-  .setting-label{font-size:0.88rem;color:var(--text);}
-  .setting-note{font-size:0.72rem;color:var(--muted);margin-top:2px;font-family:'Inconsolata',monospace;}
-  .setting-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
-    padding:7px 12px;color:var(--accent);font-family:'Inconsolata',monospace;font-size:1rem;
-    font-weight:600;outline:none;width:100px;text-align:center;}
-  .setting-input:focus{border-color:var(--accent);}
-  /* Entry form */
-  .week-bar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
-  .week-label{font-family:'Inconsolata',monospace;font-size:0.7rem;color:var(--muted);letter-spacing:0.1em;white-space:nowrap;}
-  .week-input{background:var(--surface);border:1px solid var(--border);border-radius:8px;
-    padding:8px 12px;color:var(--text);font-family:'Inconsolata',monospace;font-size:0.88rem;outline:none;}
-  .week-input:focus{border-color:var(--accent);}
-  .photo-tab-bar{display:flex;gap:8px;margin-bottom:16px;}
-  .photo-tab{flex:1;padding:9px;border-radius:9px;border:1px solid var(--border);
-    background:var(--surface);color:var(--muted);font-family:'Source Sans 3',sans-serif;
-    font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;text-align:center;}
-  .photo-tab.active{background:var(--accent);color:#0F1117;border-color:var(--accent);}
-  .day-section{margin-bottom:14px;}
-  .day-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-  .day-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .day-name{font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--text);}
-  .day-line{flex:1;height:1px;background:var(--border);}
-  .market-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;transition:border-color 0.2s;}
-  .market-card:focus-within{border-color:rgba(232,164,74,0.35);}
-  .market-name{font-size:0.88rem;font-weight:600;color:var(--text);margin-bottom:10px;}
-  .market-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .input-group{display:flex;flex-direction:column;gap:4px;}
-  .input-label{font-family:'Inconsolata',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
-  .market-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;
-    padding:8px 10px;color:var(--text);font-family:'Inconsolata',monospace;font-size:0.95rem;outline:none;width:100%;}
-  .market-input:focus{border-color:var(--accent);}
-  .tip-input:focus{border-color:var(--purple);}
-  .market-rev{font-family:'Inconsolata',monospace;font-size:0.85rem;color:var(--green);
-    font-weight:600;padding:8px 10px;background:rgba(92,184,122,0.07);border:1px solid rgba(92,184,122,0.15);border-radius:7px;display:flex;align-items:center;}
-  /* Bonus / Salary rows */
-  .extra-row{border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-  .extra-row.bonus{background:rgba(72,169,153,0.08);border:1px solid rgba(72,169,153,0.2);}
-  .extra-row.salary{background:rgba(91,143,212,0.08);border:1px solid rgba(91,143,212,0.2);}
-  .extra-label{font-family:'Inconsolata',monospace;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;}
-  .extra-label.bonus{color:var(--teal);}
-  .extra-label.salary{color:var(--accent2);}
-  .extra-input{background:var(--surface2);border-radius:7px;padding:8px 12px;font-family:'Inconsolata',monospace;font-size:1rem;font-weight:600;outline:none;width:110px;text-align:center;}
-  .extra-input.bonus{border:1px solid rgba(72,169,153,0.3);color:var(--teal);}
-  .extra-input.bonus:focus{border-color:var(--teal);}
-  .extra-input.salary{border:1px solid rgba(91,143,212,0.3);color:var(--accent2);}
-  .extra-input.salary:focus{border-color:var(--accent2);}
-  /* Totals row */
-  .totals-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:14px 0;
-    border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:16px;}
-  .total-item{text-align:center;}
-  .total-lbl{font-family:'Inconsolata',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;}
-  .total-val{font-family:'Inconsolata',monospace;font-size:0.88rem;font-weight:600;}
-  .tv-b{color:var(--text);}.tv-r{color:var(--green);}.tv-t{color:var(--purple);}.tv-bo{color:var(--teal);}.tv-sal{color:var(--accent2);}.tv-to{color:var(--accent);}
-  .save-btn{width:100%;padding:13px;background:var(--accent);color:#0F1117;
-    border:none;border-radius:10px;font-family:'Playfair Display',serif;font-size:1rem;
-    font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s;}
-  .save-btn:hover{background:#F0B85A;}
-  .save-btn:disabled{background:#5A4A2A;color:#8A7A5A;cursor:not-allowed;}
-  .reset-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);
-    padding:8px;font-family:'Source Sans 3',sans-serif;font-size:0.82rem;cursor:pointer;width:100%;margin-top:8px;}
-  .reset-btn:hover{border-color:var(--red);color:var(--red);}
-  .success-box{background:rgba(92,184,122,0.1);border:1px solid rgba(92,184,122,0.3);border-radius:10px;padding:14px;text-align:center;margin-top:12px;}
-  .success-box p{color:var(--green);font-size:0.88rem;margin-bottom:6px;}
-  .success-box a{color:var(--accent2);font-size:0.82rem;}
-  /* Summary */
-  .section-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;}
-  .section-title{font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:var(--accent);margin-bottom:14px;}
-  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px;}
-  .stat-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center;}
-  .stat-label{font-family:'Inconsolata',monospace;font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
-  .stat-value{font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:700;color:var(--text);line-height:1;}
-  .stat-sub{font-size:0.65rem;color:var(--muted);font-family:'Inconsolata',monospace;margin-top:3px;}
-  .proj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .proj-box{border-radius:10px;padding:14px 10px;text-align:center;}
-  .proj-box.week{background:rgba(91,143,212,0.1);border:1px solid rgba(91,143,212,0.2);}
-  .proj-box.month{background:rgba(232,164,74,0.1);border:1px solid rgba(232,164,74,0.2);}
-  .proj-box.year{background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.15);}
-  .proj-period{font-family:'Inconsolata',monospace;font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
-  .proj-amount{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--text);line-height:1;margin-bottom:2px;}
-  .proj-sub{font-size:0.68rem;color:var(--muted);font-family:'Inconsolata',monospace;}
-  .week-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
-  .week-row:last-child{border-bottom:none;}
-  .week-row-date{font-family:'Inconsolata',monospace;font-size:0.78rem;color:var(--muted);}
-  .week-row-markets{font-size:0.78rem;color:var(--text);}
-  .week-row-total{font-family:'Inconsolata',monospace;font-size:0.88rem;font-weight:600;color:var(--accent);}
-  .loading-box{text-align:center;padding:32px 20px;color:var(--muted);font-family:'Inconsolata',monospace;font-size:0.82rem;}
-  .error-box{background:rgba(224,92,92,0.08);border:1px solid rgba(224,92,92,0.2);border-radius:10px;padding:14px;font-size:0.82rem;color:var(--red);font-family:'Inconsolata',monospace;}
-  /* Log */
-  .log-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
-  .log-title{font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:var(--accent);}
-  .log-empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:0.88rem;font-family:'Inconsolata',monospace;}
-  .log-table{width:100%;border-collapse:collapse;font-size:0.8rem;}
-  .log-table th{background:var(--surface2);color:var(--muted);padding:8px 10px;text-align:left;
-    font-family:'Inconsolata',monospace;font-size:0.65rem;letter-spacing:0.08em;border-bottom:1px solid var(--border);white-space:nowrap;}
-  .log-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
-  .log-table tr:last-child td{border-bottom:none;}
-  .log-table tr:nth-child(even) td{background:rgba(255,255,255,0.02);}
-  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-family:'Inconsolata',monospace;font-size:0.65rem;font-weight:600;}
-  .badge-mon{background:rgba(74,144,217,0.15);color:#4A90D9;}
-  .badge-tue{background:rgba(230,126,58,0.15);color:#E67E3A;}
-  .badge-wed{background:rgba(124,184,122,0.15);color:#7CB87A;}
-  .badge-thu{background:rgba(192,107,191,0.15);color:#C06BBF;}
-  .badge-sat{background:rgba(232,184,75,0.15);color:#E8B84B;}
-  .badge-sun{background:rgba(224,92,92,0.15);color:#E05C5C;}
-  .badge-store{background:rgba(72,169,153,0.15);color:#48A999;}
-  .badge-bonus{background:rgba(72,169,153,0.15);color:#48A999;}
-  .log-summary{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px;}
-  .log-sum-row{display:flex;justify-content:space-between;padding:5px 0;font-size:0.85rem;border-bottom:1px solid var(--border);}
-  .log-sum-row:last-child{border-bottom:none;font-weight:600;color:var(--accent);}
-  /* Photo */
-  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:36px 20px;
-    text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);position:relative;}
-  .drop-zone:hover{border-color:var(--accent);background:rgba(232,164,74,0.04);}
-  .drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-  .drop-icon{font-size:2.4rem;margin-bottom:8px;display:block;}
-  .drop-text{font-size:0.92rem;color:var(--text);margin-bottom:3px;font-weight:600;}
-  .drop-sub{font-size:0.75rem;color:var(--muted);font-family:'Inconsolata',monospace;}
-  .preview-img{width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid var(--border);margin-bottom:12px;}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    padding:10px 20px;border-radius:9px;font-family:'Source Sans 3',sans-serif;
-    font-size:0.88rem;font-weight:600;cursor:pointer;transition:all 0.18s;border:none;}
-  .btn-accent{background:var(--accent);color:#0F1117;width:100%;}
-  .btn-accent:disabled{background:#5A4A2A;color:#8A7A5A;cursor:not-allowed;}
-  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
-  .btn-green{background:var(--green);color:#0F1117;width:100%;}
-  .btn-green:disabled{background:#2A5A3A;color:#5A8A6A;cursor:not-allowed;}
-  .btn-sm{padding:6px 12px;font-size:0.8rem;}
-  .action-row{display:flex;gap:8px;align-items:center;}
-  .flex1{flex:1;}
-  .status{padding:9px 13px;border-radius:8px;font-family:'Inconsolata',monospace;font-size:0.8rem;margin-bottom:12px;}
-  .status.ok{background:rgba(92,184,122,0.1);border:1px solid rgba(92,184,122,0.25);color:var(--green);}
-  .status.error{background:rgba(224,92,92,0.1);border:1px solid rgba(224,92,92,0.25);color:var(--red);}
-  .status.info{background:rgba(91,143,212,0.1);border:1px solid rgba(91,143,212,0.25);color:var(--accent2);}
-  .raw-note{background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-    padding:12px;font-family:'Inconsolata',monospace;font-size:0.78rem;color:var(--muted);
-    white-space:pre-wrap;line-height:1.6;margin-bottom:12px;}
-  .micro-label{font-family:'Inconsolata',monospace;font-size:0.63rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:5px;}
-  .scan-table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:0.85rem;}
-  .scan-table th{background:var(--surface2);color:var(--muted);padding:8px 10px;
-    text-align:left;font-family:'Inconsolata',monospace;font-size:0.65rem;letter-spacing:0.08em;border-bottom:1px solid var(--border);}
-  .scan-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
-  .scan-table tr:last-child td{border-bottom:none;}
-  .scan-table input,.scan-table select{background:var(--surface2);border:1px solid var(--border);
-    border-radius:6px;padding:5px 7px;font-family:'Inconsolata',monospace;font-size:0.8rem;
-    color:var(--text);width:100%;outline:none;}
-  .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.95rem;padding:2px 5px;}
-  .del-btn:hover{color:var(--red);}
-  .add-row{background:none;border:1px dashed var(--border);border-radius:7px;color:var(--muted);
-    padding:6px;font-size:0.8rem;cursor:pointer;width:100%;margin-bottom:12px;font-family:'Source Sans 3',sans-serif;}
-  .spinner{width:15px;height:15px;border:2px solid rgba(15,17,23,0.3);border-top-color:#0F1117;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;}
-  .spinner-lg{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;margin-bottom:10px;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .refresh-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);
-    padding:6px 12px;font-family:'Inconsolata',monospace;font-size:0.72rem;cursor:pointer;
-    display:inline-flex;align-items:center;gap:5px;}
-  .refresh-btn:hover{border-color:var(--accent);color:var(--accent);}
-  .divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
+  .hero { background: linear-gradient(135deg, #0F1117 0%, #1A1F30 50%, #0F1117 100%);
+    border-bottom: 1px solid var(--border); padding: 24px 20px 16px; text-align: center; }
+  .hero-eyebrow { font-family:'Inconsolata',monospace; font-size:0.7rem; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; margin-bottom:4px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:1.8rem; font-weight:900; color:var(--text); line-height:1.1; margin-bottom:2px; }
+  .hero h1 span { color:var(--accent); }
+  .hero-sub { font-size:0.78rem; color:var(--muted); }
+  .sheet-pill { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:4px 12px;
+    background:rgba(91,143,212,0.12); border:1px solid rgba(91,143,212,0.3); border-radius:20px;
+    font-family:'Inconsolata',monospace; font-size:0.7rem; color:var(--accent2); text-decoration:none; }
+
+  /* Main nav tabs */
+  .main-nav { display:flex; max-width:720px; margin:0 auto; border-bottom:1px solid var(--border); overflow-x:auto; }
+  .main-nav::-webkit-scrollbar { display:none; }
+  .nav-tab { flex:none; padding:12px 18px; font-family:'Inconsolata',monospace; font-size:0.75rem;
+    letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); cursor:pointer;
+    border-bottom:2px solid transparent; background:none; border-top:none; border-left:none; border-right:none;
+    white-space:nowrap; transition:all 0.2s; }
+  .nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .nav-tab:hover:not(.active) { color:var(--text); }
+
+  .content { max-width:720px; margin:0 auto; padding:20px 16px; }
+
+  /* ── SETTINGS TAB ── */
+  .settings-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .settings-title { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--accent); margin-bottom:14px; }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+  .setting-row:last-child { border-bottom:none; }
+  .setting-label { font-size:0.88rem; color:var(--text); }
+  .setting-note { font-size:0.72rem; color:var(--muted); margin-top:2px; font-family:'Inconsolata',monospace; }
+  .setting-input { background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+    padding:7px 12px; color:var(--accent); font-family:'Inconsolata',monospace; font-size:1rem;
+    font-weight:600; outline:none; width:100px; text-align:center; }
+  .setting-input:focus { border-color:var(--accent); }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .info-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; }
+  .info-box-label { font-family:'Inconsolata',monospace; font-size:0.65rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:4px; }
+  .info-box-value { font-size:0.9rem; font-weight:600; color:var(--text); }
+
+  /* ── ENTRY FORM TAB ── */
+  .week-bar { display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .week-label { font-family:'Inconsolata',monospace; font-size:0.7rem; color:var(--muted); letter-spacing:0.1em; white-space:nowrap; }
+  .week-input { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:8px 12px; color:var(--text); font-family:'Inconsolata',monospace; font-size:0.88rem; outline:none; }
+  .week-input:focus { border-color:var(--accent); }
+  .photo-tab-bar { display:flex; gap:8px; margin-bottom:16px; }
+  .photo-tab { flex:1; padding:9px; border-radius:9px; border:1px solid var(--border);
+    background:var(--surface); color:var(--muted); font-family:'Source Sans 3',sans-serif;
+    font-size:0.82rem; font-weight:600; cursor:pointer; transition:all 0.2s; text-align:center; }
+  .photo-tab.active { background:var(--accent); color:#0F1117; border-color:var(--accent); }
+  .day-section { margin-bottom:14px; }
+  .day-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .day-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .day-name { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--text); }
+  .day-line { flex:1; height:1px; background:var(--border); }
+  .market-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:8px; transition:border-color 0.2s; }
+  .market-card:focus-within { border-color:rgba(232,164,74,0.35); }
+  .market-name { font-size:0.88rem; font-weight:600; color:var(--text); margin-bottom:10px; }
+  .market-inputs { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .input-group { display:flex; flex-direction:column; gap:4px; }
+  .input-label { font-family:'Inconsolata',monospace; font-size:0.65rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; }
+  .market-input { background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+    padding:8px 10px; color:var(--text); font-family:'Inconsolata',monospace; font-size:0.95rem; outline:none; width:100%; }
+  .market-input:focus { border-color:var(--accent); }
+  .tip-input:focus { border-color:var(--purple); }
+  .market-rev { font-family:'Inconsolata',monospace; font-size:0.85rem; color:var(--green);
+    font-weight:600; padding:8px 10px; background:rgba(92,184,122,0.07); border:1px solid rgba(92,184,122,0.15); border-radius:7px; display:flex; align-items:center; }
+  .bonus-row { background:rgba(72,169,153,0.08); border:1px solid rgba(72,169,153,0.2); border-radius:10px; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .bonus-label { font-family:'Inconsolata',monospace; font-size:0.75rem; color:var(--teal); letter-spacing:0.1em; text-transform:uppercase; }
+  .bonus-input { background:var(--surface2); border:1px solid rgba(72,169,153,0.3); border-radius:7px; padding:8px 12px; color:var(--teal); font-family:'Inconsolata',monospace; font-size:1rem; font-weight:600; outline:none; width:110px; text-align:center; }
+  .bonus-input:focus { border-color:var(--teal); }
+  .save-btn { width:100%; padding:13px; background:var(--accent); color:#0F1117;
+    border:none; border-radius:10px; font-family:'Playfair Display',serif; font-size:1rem;
+    font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; }
+  .save-btn:hover { background:#F0B85A; }
+  .save-btn:disabled { background:#5A4A2A; color:#8A7A5A; cursor:not-allowed; }
+  .reset-btn { background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted);
+    padding:8px; font-family:'Source Sans 3',sans-serif; font-size:0.82rem; cursor:pointer; width:100%; margin-top:8px; }
+  .reset-btn:hover { border-color:var(--red); color:var(--red); }
+  .success-box { background:rgba(92,184,122,0.1); border:1px solid rgba(92,184,122,0.3); border-radius:10px; padding:14px; text-align:center; margin-top:12px; }
+  .success-box p { color:var(--green); font-size:0.88rem; margin-bottom:6px; }
+  .success-box a { color:var(--accent2); font-size:0.82rem; }
+
+  /* ── SUMMARY SECTION ── */
+  .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px; }
+  .summary-box { border-radius:10px; padding:14px 10px; text-align:center; }
+  .summary-box.week  { background:rgba(91,143,212,0.1);  border:1px solid rgba(91,143,212,0.2); }
+  .summary-box.month { background:rgba(232,164,74,0.1);  border:1px solid rgba(232,164,74,0.2); }
+  .summary-box.year  { background:rgba(224,92,92,0.08);  border:1px solid rgba(224,92,92,0.15); }
+  .summary-period { font-family:'Inconsolata',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .summary-amount { font-family:'Playfair Display',serif; font-size:1.2rem; font-weight:700; color:var(--text); line-height:1; margin-bottom:2px; }
+  .summary-sub { font-size:0.68rem; color:var(--muted); font-family:'Inconsolata',monospace; }
+  .totals-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding:14px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin-bottom:16px; }
+  .total-item { text-align:center; }
+  .total-lbl { font-family:'Inconsolata',monospace; font-size:0.58rem; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:3px; }
+  .total-val { font-family:'Inconsolata',monospace; font-size:0.88rem; font-weight:600; }
+  .tv-b { color:var(--text); } .tv-r { color:var(--green); } .tv-t { color:var(--purple); } .tv-bo { color:var(--teal); } .tv-to { color:var(--accent); }
+
+  /* ── DAILY LOG TAB ── */
+  .log-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .log-title { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:var(--accent); }
+  .log-empty { text-align:center; padding:40px 20px; color:var(--muted); font-size:0.88rem; font-family:'Inconsolata',monospace; }
+  .log-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+  .log-table th { background:var(--surface2); color:var(--muted); padding:8px 10px; text-align:left;
+    font-family:'Inconsolata',monospace; font-size:0.65rem; letter-spacing:0.08em; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .log-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .log-table tr:last-child td { border-bottom:none; }
+  .log-table tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-family:'Inconsolata',monospace; font-size:0.65rem; font-weight:600; }
+  .badge-mon { background:rgba(74,144,217,0.15); color:#4A90D9; }
+  .badge-tue { background:rgba(230,126,58,0.15); color:#E67E3A; }
+  .badge-wed { background:rgba(124,184,122,0.15); color:#7CB87A; }
+  .badge-thu { background:rgba(192,107,191,0.15); color:#C06BBF; }
+  .badge-sat { background:rgba(232,184,75,0.15); color:#E8B84B; }
+  .badge-sun { background:rgba(224,92,92,0.15); color:#E05C5C; }
+  .badge-store { background:rgba(72,169,153,0.15); color:#48A999; }
+  .badge-bonus { background:rgba(72,169,153,0.15); color:#48A999; }
+  .log-summary { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:14px; }
+  .log-sum-row { display:flex; justify-content:space-between; padding:5px 0; font-size:0.85rem; border-bottom:1px solid var(--border); }
+  .log-sum-row:last-child { border-bottom:none; font-weight:600; color:var(--accent); }
+
+  /* ── PHOTO MODE ── */
+  .drop-zone { border:2px dashed var(--border); border-radius:12px; padding:36px 20px;
+    text-align:center; cursor:pointer; transition:all 0.2s; background:var(--surface); position:relative; }
+  .drop-zone:hover { border-color:var(--accent); background:rgba(232,164,74,0.04); }
+  .drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .drop-icon { font-size:2.4rem; margin-bottom:8px; display:block; }
+  .drop-text { font-size:0.92rem; color:var(--text); margin-bottom:3px; font-weight:600; }
+  .drop-sub { font-size:0.75rem; color:var(--muted); font-family:'Inconsolata',monospace; }
+  .preview-img { width:100%; max-height:240px; object-fit:contain; border-radius:10px; border:1px solid var(--border); margin-bottom:12px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px 20px; border-radius:9px; font-family:'Source Sans 3',sans-serif;
+    font-size:0.88rem; font-weight:600; cursor:pointer; transition:all 0.18s; border:none; }
+  .btn-accent { background:var(--accent); color:#0F1117; width:100%; }
+  .btn-accent:disabled { background:#5A4A2A; color:#8A7A5A; cursor:not-allowed; }
+  .btn-outline { background:transparent; border:1px solid var(--border); color:var(--muted); }
+  .btn-green { background:var(--green); color:#0F1117; width:100%; }
+  .btn-green:disabled { background:#2A5A3A; color:#5A8A6A; cursor:not-allowed; }
+  .btn-sm { padding:6px 12px; font-size:0.8rem; }
+  .action-row { display:flex; gap:8px; align-items:center; }
+  .flex1 { flex:1; }
+  .status { padding:9px 13px; border-radius:8px; font-family:'Inconsolata',monospace; font-size:0.8rem; margin-bottom:12px; }
+  .status.ok    { background:rgba(92,184,122,0.1); border:1px solid rgba(92,184,122,0.25); color:var(--green); }
+  .status.error { background:rgba(224,92,92,0.1);  border:1px solid rgba(224,92,92,0.25);  color:var(--red); }
+  .status.info  { background:rgba(91,143,212,0.1); border:1px solid rgba(91,143,212,0.25); color:var(--accent2); }
+  .raw-note { background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:12px; font-family:'Inconsolata',monospace; font-size:0.78rem; color:var(--muted);
+    white-space:pre-wrap; line-height:1.6; margin-bottom:12px; }
+  .micro-label { font-family:'Inconsolata',monospace; font-size:0.63rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:5px; }
+  .scan-table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:0.85rem; }
+  .scan-table th { background:var(--surface2); color:var(--muted); padding:8px 10px;
+    text-align:left; font-family:'Inconsolata',monospace; font-size:0.65rem; letter-spacing:0.08em; border-bottom:1px solid var(--border); }
+  .scan-table td { padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .scan-table tr:last-child td { border-bottom:none; }
+  .scan-table input, .scan-table select { background:var(--surface2); border:1px solid var(--border);
+    border-radius:6px; padding:5px 7px; font-family:'Inconsolata',monospace; font-size:0.8rem;
+    color:var(--text); width:100%; outline:none; }
+  .del-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:0.95rem; padding:2px 5px; }
+  .del-btn:hover { color:var(--red); }
+  .add-row { background:none; border:1px dashed var(--border); border-radius:7px; color:var(--muted);
+    padding:6px; font-size:0.8rem; cursor:pointer; width:100%; margin-bottom:12px; font-family:'Source Sans 3',sans-serif; }
+  .spinner { width:15px; height:15px; border:2px solid rgba(15,17,23,0.3); border-top-color:#0F1117; border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .section-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .section-title { font-family:'Playfair Display',serif; font-size:0.95rem; font-weight:700; color:var(--accent); margin-bottom:14px; }
+  .divider { border:none; border-top:1px solid var(--border); margin:16px 0; }
 `;
 
 export default function App() {
-  const [tab, setTab]               = useState("entry");
-  const [price, setPrice]           = useState(8);
-  const [entryMode, setEntryMode]   = useState("manual");
-  const [weekDate, setWeekDate]     = useState(getMonday());
-  const [weekBonus, setWeekBonus]   = useState(0);
-  const [w2Salary, setW2Salary]     = useState(0);
+  const [tab, setTab] = useState("entry");
+  const [price, setPrice] = useState(8);
+  const [weekDate, setWeekDate] = useState(getMonday());
+  const [weekBonus, setWeekBonus] = useState(0);
   const [manualData, setManualData] = useState(emptyData());
-  const [saving, setSaving]         = useState(false);
-  const [saved, setSaved]           = useState(false);
-  const [status, setStatus]         = useState(null);
-  const [log, setLog]               = useState([]);
-  // Photo state
-  const [image, setImage]             = useState(null);
-  const [imageBase64, setImageBase64] = useState(null);
-  const [scanning, setScanning]       = useState(false);
-  const [rawText, setRawText]         = useState(null);
-  const [scanRows, setScanRows]       = useState([]);
-  const [scanSaved, setScanSaved]     = useState(false);
-  const [scanSaving, setScanSaving]   = useState(false);
-  const [scanStatus, setScanStatus]   = useState(null);
-  // Sheet data for Summary
-  const [sheetRows, setSheetRows]     = useState(null);  // null = not loaded yet
-  const [sheetLoading, setSheetLoading] = useState(false);
-  const [sheetError, setSheetError]   = useState(null);
-  const fileRef = useRef();
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [log, setLog] = useState([]);
 
-  // ── Fetch all sheet data ─────────────────────────────────────────────────
-  const fetchSheetData = useCallback(async () => {
-    setSheetLoading(true);
-    setSheetError(null);
-    try {
-      const res  = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "getData" })
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        setSheetRows(data.rows);
-      } else {
-        setSheetError("Script error: " + (data.message || JSON.stringify(data)));
-      }
-    } catch (err) {
-      setSheetError("Fetch error: " + err.message);
-    }
-    setSheetLoading(false);
-  }, []);
-
-  // Load sheet data whenever Summary tab is opened
-  useEffect(() => {
-    if (tab === "summary") fetchSheetData();
-  }, [tab, fetchSheetData]);
-
-  // ── Entry form helpers ───────────────────────────────────────────────────
   const updateManual = (market, field, val) => {
     setSaved(false);
-    setManualData(prev => ({...prev, [market]: {...prev[market], [field]: val===""?0:Number(val)||0}}));
+    setManualData(prev => ({ ...prev, [market]: { ...prev[market], [field]: val===""?0:Number(val)||0 } }));
   };
-  const totalContainers  = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.containers||0),0);
-  const totalRevenue     = totalContainers * price;
-  const totalTips        = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.tips||0),0);
-  const totalBonus       = Number(weekBonus)||0;
-  const totalSalary      = Number(w2Salary)||0;
-  const totalMarketIncome = totalRevenue + totalTips + totalBonus;
-  const totalCombined    = totalMarketIncome + totalSalary;
+
+  const totalContainers = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.containers||0),0);
+  const totalRevenue    = totalContainers * price;
+  const totalTips       = MARKETS.reduce((s,m)=>s+(manualData[m.name]?.tips||0),0);
+  const totalBonus      = Number(weekBonus)||0;
+  const totalCombined   = totalRevenue + totalTips + totalBonus;
 
   const saveToSheets = async (csvRows) => {
-    const rows = csvRows.split("\n").map(row => {
-      const result = []; let current = ""; let inQuotes = false;
-      for (let i=0;i<row.length;i++) {
-        if (row[i]==='"') { inQuotes=!inQuotes; }
-        else if (row[i]===","&&!inQuotes) { result.push(current); current=""; }
-        else { current+=row[i]; }
-      }
-      result.push(current);
-      return result;
-    });
-    const res = await fetch(WEBHOOK_URL, {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
-      headers:{"Content-Type":"text/plain"},
-      body: JSON.stringify({rows})
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key": process.env.REACT_APP_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model:"claude-3-5-sonnet-20241022", max_tokens:1000,
+        messages:[{role:"user",content:`Append to Google Sheet ID ${SHEET_ID}. Download CSV, add rows at bottom, re-upload. No headers.\nColumns: Week Starting, Market, Day, Containers, Revenue, Tips, Bonus, Total, Saved On\nRows:\n${csvRows}`}],
+        mcp_servers:[{type:"url",url:"https://drivemcp.googleapis.com/mcp/v1",name:"gdrive"}]
+      })
     });
     const d = await res.json();
-    return d.status === "success";
+    const txt = d.content.filter(i=>i.type==="text").map(i=>i.text).join(" ").toLowerCase();
+    const tool = d.content.filter(i=>i.type==="mcp_tool_result");
+    return tool.length>0||txt.includes("success")||txt.includes("upload");
   };
 
   const saveManual = async () => {
     setSaving(true); setSaved(false); setStatus(null);
     const scannedOn = new Date().toLocaleString();
     const active = MARKETS.filter(m=>(manualData[m.name]?.containers||0)>0||(manualData[m.name]?.tips||0)>0);
-    if (!active.length && totalBonus===0 && totalSalary===0) {
-      setStatus({msg:"No data entered yet.",type:"error"}); setSaving(false); return;
-    }
+    if (!active.length) { setStatus({msg:"No data entered yet.",type:"error"}); setSaving(false); return; }
+
     const marketRows = active.map(m => {
       const c=manualData[m.name].containers||0, t=manualData[m.name].tips||0, rev=c*price;
       return `${weekDate},"${m.name}","${m.day}",${c},$${rev.toFixed(2)},$${t.toFixed(2)},$0.00,$${(rev+t).toFixed(2)},"${scannedOn}"`;
     });
-    if (totalBonus>0)  marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
-    if (totalSalary>0) marketRows.push(`${weekDate},"W2 Salary","—",0,$0.00,$0.00,$${totalSalary.toFixed(2)},$${totalSalary.toFixed(2)},"${scannedOn}"`);
+    if (totalBonus>0) marketRows.push(`${weekDate},"Weekly Bonus","—",0,$0.00,$0.00,$${totalBonus.toFixed(2)},$${totalBonus.toFixed(2)},"${scannedOn}"`);
+
     try {
       const ok = await saveToSheets(marketRows.join("\n"));
       if (ok) {
         setSaved(true);
-        const newEntries = active.map(m=>({
-          date:weekDate, market:m.name, day:m.day,
-          containers:manualData[m.name].containers||0,
-          revenue:(manualData[m.name].containers||0)*price,
-          tips:manualData[m.name].tips||0, bonus:0, salary:0, savedOn:scannedOn
+        // Add to local log
+        const newEntries = active.map(m => ({
+          date: weekDate, market: m.name, day: m.day,
+          containers: manualData[m.name].containers||0,
+          revenue: (manualData[m.name].containers||0)*price,
+          tips: manualData[m.name].tips||0,
+          bonus: 0, savedOn: scannedOn
         }));
-        if (newEntries.length>0) {
-          if (totalBonus>0)  newEntries[0].bonus  = totalBonus;
-          if (totalSalary>0) newEntries[0].salary = totalSalary;
-        }
-        setLog(prev=>[...newEntries,...prev]);
-        // Invalidate sheet cache so Summary reloads fresh next time
-        setSheetRows(null);
+        if (totalBonus>0) newEntries[0].bonus = totalBonus;
+        setLog(prev => [...newEntries, ...prev]);
       } else setStatus({msg:"Something went wrong. Try again.",type:"error"});
     } catch { setStatus({msg:"Could not connect. Try again.",type:"error"}); }
     setSaving(false);
   };
 
-  const resetManual = () => {
-    setManualData(emptyData()); setSaved(false); setStatus(null);
-    setWeekDate(getMonday()); setWeekBonus(0); setW2Salary(0);
-  };
-
-  // ── Photo helpers ────────────────────────────────────────────────────────
-  const handleFile = useCallback((file) => {
-    if (!file||!file.type.startsWith("image/")) return;
-    setImage(URL.createObjectURL(file)); setImageBase64(null);
-    setScanRows([]); setRawText(null); setScanSaved(false); setScanStatus(null);
-    const r=new FileReader();
-    r.onload=e=>setImageBase64(e.target.result.split(",")[1]);
-    r.readAsDataURL(file);
-  },[]);
-
-  const scan = async () => {
-    if (!imageBase64) return;
-    setScanning(true); setScanStatus({msg:"Reading the note...",type:"info"});
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":process.env.REACT_APP_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({
-          model:"claude-3-5-sonnet-20241022",max_tokens:1000,
-          messages:[{role:"user",content:[
-            {type:"image",source:{type:"base64",media_type:"image/jpeg",data:imageBase64}},
-            {type:"text",text:`Extract sales data from this handwritten sticky note. Known markets: ${MARKETS.map(m=>m.name).join(", ")}. Return ONLY valid JSON: {"raw_text":"verbatim","entries":[{"date":"YYYY-MM-DD","location":"matched market","containers":12,"tips":0}],"notes":"issues"}. Match locations loosely. Assume current year if missing.`}
-          ]}]
-        })
-      });
-      const d=await res.json();
-      const txtResponse=d.content.find(i=>i.type==="text")?.text||"{}";
-      const parsed=JSON.parse(txtResponse.replace(/```json|```/g,"").trim());
-      setRawText(parsed.raw_text||"");
-      setScanRows((parsed.entries||[]).map((e,i)=>({id:Date.now()+i,date:e.date||weekDate,location:e.location||"",containers:e.containers??0,tips:e.tips??0})));
-      const hasNote=parsed.notes&&parsed.notes.toLowerCase()!=="none";
-      setScanStatus({msg:hasNote?`Found ${parsed.entries?.length||0} entries. Note: ${parsed.notes}`:`Found ${parsed.entries?.length||0} entries — review and save.`,type:hasNote?"error":"ok"});
-    } catch { setScanStatus({msg:"Couldn't read the image. Try a clearer photo.",type:"error"}); }
-    setScanning(false);
-  };
-
-  const updateScanRow = (id,field,val) => setScanRows(prev=>prev.map(r=>r.id===id?{...r,[field]:["containers","tips"].includes(field)?(val===""?0:Number(val)||0):val}:r));
-  const deleteScanRow = (id) => setScanRows(prev=>prev.filter(r=>r.id!==id));
-  const addScanRow    = () => setScanRows(prev=>[...prev,{id:Date.now(),date:weekDate,location:"",containers:0,tips:0}]);
-
-  const saveScan = async () => {
-    setScanSaving(true); setScanSaved(false);
-    const scannedOn=new Date().toLocaleString();
-    const rows=scanRows.map(r=>{
-      const rev=(r.containers||0)*price;
-      return `${r.date},"${r.location}","",${r.containers||0},$${rev.toFixed(2)},$${(r.tips||0).toFixed(2)},$0.00,$${(rev+(r.tips||0)).toFixed(2)},"${scannedOn}"`;
-    }).join("\n");
-    try {
-      const ok=await saveToSheets(rows);
-      if (ok) {
-        setScanSaved(true); setScanStatus({msg:`${scanRows.length} rows saved!`,type:"ok"});
-        setLog(prev=>[...scanRows.map(r=>({date:r.date,market:r.location,day:"",containers:r.containers||0,revenue:(r.containers||0)*price,tips:r.tips||0,bonus:0,salary:0,savedOn:scannedOn})),...prev]);
-        setSheetRows(null);
-      } else setScanStatus({msg:"Something went wrong. Try again.",type:"error"});
-    } catch { setScanStatus({msg:"Could not connect. Try again.",type:"error"}); }
-    setScanSaving(false);
-  };
-
-  const resetPhoto = () => { setImage(null); setImageBase64(null); setScanRows([]); setRawText(null); setScanSaved(false); setScanStatus(null); };
+  const resetManual = () => { setManualData(emptyData()); setSaved(false); setStatus(null); setWeekDate(getMonday()); setWeekBonus(0); };
 
   const dayBadgeClass = (day) => {
-    const map={Monday:"mon",Tuesday:"tue",Wednesday:"wed",Thursday:"thu",Saturday:"sat",Sunday:"sun",Store:"store","—":"bonus"};
+    const map = {Monday:"mon",Tuesday:"tue",Wednesday:"wed",Thursday:"thu",Saturday:"sat",Sunday:"sun",Store:"store","—":"bonus"};
     return `badge badge-${map[day]||"mon"}`;
   };
 
-  // ── Log totals (session only) ────────────────────────────────────────────
-  const logTotal      = log.reduce((s,r)=>s+(r.revenue||0)+(r.tips||0)+(r.bonus||0)+(r.salary||0),0);
+  // Log totals
+  const logTotal = log.reduce((s,r)=>s+(r.revenue||0)+(r.tips||0)+(r.bonus||0),0);
   const logContainers = log.reduce((s,r)=>s+(r.containers||0),0);
-  const logTips       = log.reduce((s,r)=>s+(r.tips||0),0);
-  const logBonus      = log.reduce((s,r)=>s+(r.bonus||0),0);
-  const logSalary     = log.reduce((s,r)=>s+(r.salary||0),0);
+  const logTips = log.reduce((s,r)=>s+(r.tips||0),0);
+  const logBonus = log.reduce((s,r)=>s+(r.bonus||0),0);
 
-  // ── Summary calculations from real sheet data ────────────────────────────
-  const summaryStats = (() => {
-    if (!sheetRows || sheetRows.length === 0) return null;
-
-    // All-time totals (exclude W2 Salary rows from market totals)
-    const marketRows = sheetRows.filter(r => r.market !== "W2 Salary");
-    const salaryRows = sheetRows.filter(r => r.market === "W2 Salary");
-
-    const allContainers = marketRows.reduce((s,r)=>s+(r.containers||0),0);
-    const allRevenue    = marketRows.filter(r=>r.market!=="Weekly Bonus").reduce((s,r)=>s+(r.revenue||0),0);
-    const allTips       = marketRows.reduce((s,r)=>s+(r.tips||0),0);
-    const allBonus      = marketRows.filter(r=>r.market==="Weekly Bonus").reduce((s,r)=>s+(r.bonus||0),0);
-    const allSalary     = salaryRows.reduce((s,r)=>s+(r.bonus||0),0);
-    const allTotal      = allRevenue + allTips + allBonus + allSalary;
-
-    // Group by week date
-    const weekMap = {};
-    sheetRows.forEach(r => {
-      if (!weekMap[r.weekDate]) weekMap[r.weekDate] = { containers:0, revenue:0, tips:0, bonus:0, salary:0, markets:new Set() };
-      const w = weekMap[r.weekDate];
-      if (r.market === "W2 Salary") {
-        w.salary += r.bonus || 0;
-      } else if (r.market === "Weekly Bonus") {
-        w.bonus += r.bonus || 0;
-      } else {
-        w.containers += r.containers || 0;
-        w.revenue    += r.revenue    || 0;
-        w.tips       += r.tips       || 0;
-        w.markets.add(r.market);
-      }
-    });
-
-    const weeks = Object.entries(weekMap)
-      .sort((a,b) => b[0].localeCompare(a[0]))  // newest first
-      .map(([date, data]) => ({
-        date,
-        containers: data.containers,
-        revenue:    data.revenue,
-        tips:       data.tips,
-        bonus:      data.bonus,
-        salary:     data.salary,
-        markets:    data.markets.size,
-        marketTotal: data.revenue + data.tips + data.bonus,
-        total:      data.revenue + data.tips + data.bonus + data.salary,
-      }));
-
-    // Average weekly market income (exclude salary) for projections
-    const avgWeekly = weeks.length > 0
-      ? weeks.reduce((s,w)=>s+w.marketTotal,0) / weeks.length
-      : 0;
-
-    return { allContainers, allRevenue, allTips, allBonus, allSalary, allTotal, weeks, avgWeekly };
-  })();
-
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <>
       <style>{styles}</style>
@@ -495,15 +319,17 @@ export default function App() {
           <div className="hero-sub">Weekly market tracker</div>
           <a className="sheet-pill" href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">📊 Live Google Sheet</a>
         </div>
-        {/* Nav */}
+
+        {/* Main Nav */}
         <div className="main-nav">
           {[["entry","✏️ Entry Form"],["log","📋 Sales Log"],["summary","📊 Summary"],["settings","⚙️ Settings"]].map(([key,label])=>(
             <button key={key} className={`nav-tab${tab===key?" active":""}`} onClick={()=>setTab(key)}>{label}</button>
           ))}
         </div>
+
         <div className="content">
 
-          {/* ══ SETTINGS ════════════════════════════════════════════════════ */}
+          {/* ══ SETTINGS ══════════════════════════════════════════════════════ */}
           {tab==="settings"&&(
             <>
               <div className="settings-card">
@@ -517,6 +343,7 @@ export default function App() {
                     onChange={e=>setPrice(e.target.value===""?8:Number(e.target.value))}/>
                 </div>
               </div>
+
               <div className="settings-card">
                 <div className="settings-title">Markets ({MARKETS.length})</div>
                 {DAYS_ORDER.map(day=>(
@@ -531,6 +358,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
               <div className="settings-card">
                 <div className="settings-title">Google Sheet</div>
                 <div style={{fontSize:"0.85rem",color:"var(--muted)",marginBottom:10}}>All data saves to your live Google Sheet automatically.</div>
@@ -542,7 +370,7 @@ export default function App() {
             </>
           )}
 
-          {/* ══ ENTRY FORM ══════════════════════════════════════════════════ */}
+          {/* ══ ENTRY FORM ════════════════════════════════════════════════════ */}
           {tab==="entry"&&(
             <>
               <div className="week-bar">
@@ -551,14 +379,8 @@ export default function App() {
                 <span className="week-label" style={{marginLeft:8}}>$/BOX</span>
                 <input type="number" className="week-input" style={{width:70,color:"var(--accent)",fontWeight:600,textAlign:"center"}} value={price} min={1} step={0.5} onChange={e=>setPrice(e.target.value===""?8:Number(e.target.value))}/>
               </div>
-              <div className="photo-tab-bar">
-                <button className={`photo-tab${entryMode==="manual"?" active":""}`} onClick={()=>setEntryMode("manual")}>✏️ Manual Entry</button>
-                <button className={`photo-tab${entryMode==="photo"?" active":""}`} onClick={()=>setEntryMode("photo")}>📸 Scan Photo</button>
-              </div>
 
-              {entryMode==="manual"&&(
-                <>
-                  {DAYS_ORDER.map(day=>(
+              {DAYS_ORDER.map(day=>(
                     <div className="day-section" key={day}>
                       <div className="day-header">
                         <div className="day-dot" style={{background:DAY_COLORS[day]}}/>
@@ -589,85 +411,30 @@ export default function App() {
                       })}
                     </div>
                   ))}
-                  <div className="extra-row bonus">
-                    <span className="extra-label bonus">⭐ Weekly Bonus</span>
-                    <input type="number" className="extra-input bonus" min={0} step={0.5} value={weekBonus||""} placeholder="$0.00" onChange={e=>setWeekBonus(e.target.value===""?0:Number(e.target.value))}/>
+
+                  <div className="bonus-row">
+                    <span className="bonus-label">⭐ Weekly Bonus</span>
+                    <input type="number" className="bonus-input" min={0} step={0.5} value={weekBonus||""} placeholder="$0.00" onChange={e=>setWeekBonus(e.target.value===""?0:Number(e.target.value))}/>
                   </div>
-                  <div className="extra-row salary">
-                    <div>
-                      <span className="extra-label salary">💼 W2 Salary</span>
-                      <div style={{fontSize:"0.68rem",color:"var(--muted)",fontFamily:"Inconsolata,monospace",marginTop:2}}>Tracked separately — not included in projections</div>
-                    </div>
-                    <input type="number" className="extra-input salary" min={0} step={0.5} value={w2Salary||""} placeholder="$0.00" onChange={e=>setW2Salary(e.target.value===""?0:Number(e.target.value))}/>
-                  </div>
+
                   <div className="totals-row">
                     <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
                     <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
                     <div className="total-item"><div className="total-lbl">Tips</div><div className="total-val tv-t">{fmt(totalTips)}</div></div>
                     <div className="total-item"><div className="total-lbl">Bonus</div><div className="total-val tv-bo">{fmt(totalBonus)}</div></div>
-                    <div className="total-item"><div className="total-lbl">W2</div><div className="total-val tv-sal">{fmt(totalSalary)}</div></div>
                     <div className="total-item"><div className="total-lbl">Total</div><div className="total-val tv-to">{fmt(totalCombined)}</div></div>
                   </div>
+
                   {!saved
                     ?<button className="save-btn" onClick={saveManual} disabled={saving}>{saving?<><span className="spinner"/>Saving...</>:"💾 Save to Google Sheets"}</button>
                     :<div className="success-box"><p>✓ Saved to your live sheet!</p><a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">Open Google Sheet →</a></div>
                   }
                   {status&&<div className={`status ${status.type}`} style={{marginTop:10}}>{status.msg}</div>}
                   <button className="reset-btn" onClick={resetManual}>Clear &amp; start a new week</button>
-                </>
-              )}
-
-              {entryMode==="photo"&&(
-                <>
-                  {!image
-                    ?<div className="drop-zone" onClick={()=>fileRef.current.click()}
-                        onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);}}>
-                        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={e=>handleFile(e.target.files[0])}/>
-                        <span className="drop-icon">📸</span>
-                        <div className="drop-text">Tap to take a photo or upload</div>
-                        <div className="drop-sub">Photo of your handwritten sticky note</div>
-                      </div>
-                    :<>
-                        <img src={image} alt="Note" className="preview-img"/>
-                        <div className="action-row">
-                          <button className="btn btn-outline btn-sm" onClick={resetPhoto}>↩ Different photo</button>
-                          <button className="btn btn-accent flex1" onClick={scan} disabled={scanning}>{scanning?<><span className="spinner"/>Reading...</>:"Extract Data →"}</button>
-                        </div>
-                      </>
-                  }
-                  {scanStatus&&<div className={`status ${scanStatus.type}`} style={{marginTop:12}}>{scanStatus.msg}</div>}
-                  {rawText&&<div style={{marginTop:12}}><div className="micro-label">What I read from the note</div><div className="raw-note">{rawText}</div></div>}
-                  {scanRows.length>0&&(
-                    <>
-                      <div style={{height:8}}/><div className="micro-label">Review &amp; edit before saving</div>
-                      <table className="scan-table">
-                        <thead><tr><th>Date</th><th>Market</th><th>Boxes</th><th>Tips</th><th></th></tr></thead>
-                        <tbody>
-                          {scanRows.map(row=>(
-                            <tr key={row.id}>
-                              <td><input type="text" value={row.date} onChange={e=>updateScanRow(row.id,"date",e.target.value)} placeholder="YYYY-MM-DD"/></td>
-                              <td><select value={row.location} onChange={e=>updateScanRow(row.id,"location",e.target.value)}><option value="">— select —</option>{MARKETS.map(m=><option key={m.name} value={m.name}>{m.name}</option>)}</select></td>
-                              <td><input type="number" value={row.containers||""} placeholder="0" min={0} onChange={e=>updateScanRow(row.id,"containers",e.target.value)}/></td>
-                              <td><input type="number" value={row.tips||""} placeholder="0.00" min={0} step={0.5} onChange={e=>updateScanRow(row.id,"tips",e.target.value)}/></td>
-                              <td><button className="del-btn" onClick={()=>deleteScanRow(row.id)}>✕</button></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <button className="add-row" onClick={addScanRow}>+ Add row manually</button>
-                      {!scanSaved
-                        ?<button className="btn btn-green" onClick={saveScan} disabled={scanSaving}>{scanSaving?<><span className="spinner"/>Saving...</>:"💾 Save to Google Sheets"}</button>
-                        :<div className="success-box"><p>✓ {scanRows.length} rows saved!</p><a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer">Open Google Sheet →</a></div>
-                      }
-                      <button className="reset-btn" onClick={resetPhoto} style={{marginTop:8}}>Scan another note</button>
-                    </>
-                  )}
-                </>
-              )}
             </>
           )}
 
-          {/* ══ SALES LOG ═══════════════════════════════════════════════════ */}
+          {/* ══ SALES LOG ═════════════════════════════════════════════════════ */}
           {tab==="log"&&(
             <>
               <div className="log-header">
@@ -680,7 +447,7 @@ export default function App() {
                 :<>
                   <div style={{overflowX:"auto"}}>
                     <table className="log-table">
-                      <thead><tr><th>Date</th><th>Market</th><th>Day</th><th>Boxes</th><th>Revenue</th><th>Tips</th><th>Bonus</th><th>W2</th><th>Total</th></tr></thead>
+                      <thead><tr><th>Date</th><th>Market</th><th>Day</th><th>Boxes</th><th>Revenue</th><th>Tips</th><th>Bonus</th><th>Total</th></tr></thead>
                       <tbody>
                         {log.map((r,i)=>(
                           <tr key={i}>
@@ -691,8 +458,7 @@ export default function App() {
                             <td style={{fontFamily:"Inconsolata,monospace",color:"var(--green)"}}>{fmt(r.revenue)}</td>
                             <td style={{fontFamily:"Inconsolata,monospace",color:"var(--purple)"}}>{fmt(r.tips)}</td>
                             <td style={{fontFamily:"Inconsolata,monospace",color:"var(--teal)"}}>{r.bonus>0?fmt(r.bonus):"—"}</td>
-                            <td style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)"}}>{r.salary>0?fmt(r.salary):"—"}</td>
-                            <td style={{fontFamily:"Inconsolata,monospace",color:"var(--accent)",fontWeight:600}}>{fmt((r.revenue||0)+(r.tips||0)+(r.bonus||0)+(r.salary||0))}</td>
+                            <td style={{fontFamily:"Inconsolata,monospace",color:"var(--accent)",fontWeight:600}}>{fmt((r.revenue||0)+(r.tips||0)+(r.bonus||0))}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -703,7 +469,6 @@ export default function App() {
                     <div className="log-sum-row"><span>Sales Revenue</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--green)"}}>{fmt(log.reduce((s,r)=>s+(r.revenue||0),0))}</span></div>
                     <div className="log-sum-row"><span>Tips</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--purple)"}}>{fmt(logTips)}</span></div>
                     <div className="log-sum-row"><span>Bonus</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--teal)"}}>{fmt(logBonus)}</span></div>
-                    <div className="log-sum-row"><span>W2 Salary</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--accent2)"}}>{fmt(logSalary)}</span></div>
                     <div className="log-sum-row"><span>Session Total</span><span style={{fontFamily:"Inconsolata,monospace"}}>{fmt(logTotal)}</span></div>
                   </div>
                 </>
@@ -711,123 +476,51 @@ export default function App() {
             </>
           )}
 
-          {/* ══ SUMMARY ═════════════════════════════════════════════════════ */}
+          {/* ══ SUMMARY ═══════════════════════════════════════════════════════ */}
           {tab==="summary"&&(
             <>
-              {/* Loading state */}
-              {sheetLoading&&(
-                <div className="loading-box">
-                  <div className="spinner-lg"/>
-                  <div>Loading your data from Google Sheets…</div>
+              <div className="section-card">
+                <div className="section-title">This Week's Estimate</div>
+                <div className="totals-row" style={{marginBottom:0,borderBottom:"none",paddingBottom:0}}>
+                  <div className="total-item"><div className="total-lbl">Boxes</div><div className="total-val tv-b">{totalContainers}</div></div>
+                  <div className="total-item"><div className="total-lbl">Sales</div><div className="total-val tv-r">{fmt(totalRevenue)}</div></div>
+                  <div className="total-item"><div className="total-lbl">Tips</div><div className="total-val tv-t">{fmt(totalTips)}</div></div>
+                  <div className="total-item"><div className="total-lbl">Bonus</div><div className="total-val tv-bo">{fmt(totalBonus)}</div></div>
+                  <div className="total-item"><div className="total-lbl">Total</div><div className="total-val tv-to">{fmt(totalCombined)}</div></div>
                 </div>
-              )}
+              </div>
 
-              {/* Error state */}
-              {sheetError&&!sheetLoading&&(
-                <div className="error-box" style={{marginBottom:14}}>
-                  ⚠️ {sheetError}
-                  <button className="refresh-btn" style={{marginTop:10,display:"block"}} onClick={fetchSheetData}>Try Again</button>
+              <div className="section-card">
+                <div className="section-title">Revenue Projection</div>
+                <div className="summary-grid">
+                  <div className="summary-box week"><div className="summary-period">This Week</div><div className="summary-amount">{fmt(totalCombined)}</div><div className="summary-sub">{totalContainers} boxes</div></div>
+                  <div className="summary-box month"><div className="summary-period">Est. Month</div><div className="summary-amount">{fmt(totalCombined*4)}</div><div className="summary-sub">×4 weeks</div></div>
+                  <div className="summary-box year"><div className="summary-period">Est. Year</div><div className="summary-amount">{fmt(totalCombined*52)}</div><div className="summary-sub">×52 weeks</div></div>
                 </div>
-              )}
+                <div style={{fontSize:"0.72rem",color:"var(--muted)",fontFamily:"Inconsolata,monospace",textAlign:"center"}}>
+                  * Monthly and yearly figures are estimates based on this week's numbers
+                </div>
+              </div>
 
-              {/* Data loaded */}
-              {!sheetLoading&&!sheetError&&summaryStats&&(
-                <>
-                  {/* All-time totals */}
-                  <div className="section-card">
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                      <div className="section-title" style={{marginBottom:0}}>All-Time Totals</div>
-                      <button className="refresh-btn" onClick={fetchSheetData}>↻ Refresh</button>
-                    </div>
-                    <div className="stat-grid">
-                      <div className="stat-box">
-                        <div className="stat-label">Boxes Sold</div>
-                        <div className="stat-value">{summaryStats.allContainers}</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-label">Revenue</div>
-                        <div className="stat-value" style={{color:"var(--green)",fontSize:"1rem"}}>{fmt(summaryStats.allRevenue)}</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-label">Tips</div>
-                        <div className="stat-value" style={{color:"var(--purple)",fontSize:"1rem"}}>{fmt(summaryStats.allTips)}</div>
-                      </div>
-                    </div>
-                    <div className="stat-grid" style={{marginTop:10}}>
-                      <div className="stat-box">
-                        <div className="stat-label">Bonuses</div>
-                        <div className="stat-value" style={{color:"var(--teal)",fontSize:"1rem"}}>{fmt(summaryStats.allBonus)}</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-label">W2 Salary</div>
-                        <div className="stat-value" style={{color:"var(--accent2)",fontSize:"1rem"}}>{fmt(summaryStats.allSalary)}</div>
-                      </div>
-                      <div className="stat-box" style={{background:"rgba(232,164,74,0.08)",border:"1px solid rgba(232,164,74,0.2)"}}>
-                        <div className="stat-label">Grand Total</div>
-                        <div className="stat-value" style={{color:"var(--accent)",fontSize:"1rem"}}>{fmt(summaryStats.allTotal)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Projections based on weekly average */}
-                  <div className="section-card">
-                    <div className="section-title">Market Revenue Projection</div>
-                    <div style={{fontSize:"0.72rem",color:"var(--muted)",fontFamily:"Inconsolata,monospace",marginBottom:12}}>
-                      Based on {summaryStats.weeks.length} week{summaryStats.weeks.length!==1?"s":""} of real data. W2 salary excluded.
-                    </div>
-                    <div className="proj-grid">
-                      <div className="proj-box week">
-                        <div className="proj-period">Avg Week</div>
-                        <div className="proj-amount">{fmt(summaryStats.avgWeekly)}</div>
-                        <div className="proj-sub">{summaryStats.weeks.length} weeks avg</div>
-                      </div>
-                      <div className="proj-box month">
-                        <div className="proj-period">Est. Month</div>
-                        <div className="proj-amount">{fmt(summaryStats.avgWeekly*4)}</div>
-                        <div className="proj-sub">×4 weeks</div>
-                      </div>
-                      <div className="proj-box year">
-                        <div className="proj-period">Est. Year</div>
-                        <div className="proj-amount">{fmt(summaryStats.avgWeekly*52)}</div>
-                        <div className="proj-sub">×52 weeks</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Weekly breakdown */}
-                  <div className="section-card">
-                    <div className="section-title">By Week</div>
-                    {summaryStats.weeks.map(w=>(
-                      <div className="week-row" key={w.date}>
-                        <div>
-                          <div className="week-row-date">{fmtDate(w.date)}</div>
-                          <div className="week-row-markets" style={{fontSize:"0.72rem",color:"var(--muted)",marginTop:2}}>
-                            {w.markets} market{w.markets!==1?"s":""}
-                            {w.containers>0?` · ${w.containers} boxes`:""}
-                            {w.tips>0?` · ${fmt(w.tips)} tips`:""}
-                            {w.bonus>0?` · ${fmt(w.bonus)} bonus`:""}
-                            {w.salary>0?` · ${fmt(w.salary)} W2`:""}
-                          </div>
-                        </div>
-                        <div style={{textAlign:"right"}}>
-                          <div className="week-row-total">{fmt(w.total)}</div>
-                          {w.salary>0&&<div style={{fontSize:"0.65rem",color:"var(--accent2)",fontFamily:"Inconsolata,monospace"}}>incl. W2</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* Empty state */}
-              {!sheetLoading&&!sheetError&&summaryStats===null&&(
-                <div className="loading-box">No data in your sheet yet.</div>
-              )}
-
-              {/* No rows returned */}
-              {!sheetLoading&&!sheetError&&sheetRows&&sheetRows.length===0&&(
-                <div className="loading-box">No entries found in your Google Sheet yet.</div>
-              )}
+              <div className="section-card">
+                <div className="section-title">Session Log Summary</div>
+                {log.length===0
+                  ?<div style={{fontSize:"0.85rem",color:"var(--muted)",textAlign:"center",padding:"16px 0"}}>No data saved yet this session.</div>
+                  :<>
+                    <div className="log-sum-row" style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:"0.85rem",borderBottom:"1px solid var(--border)"}}><span>Entries Saved</span><span style={{fontFamily:"Inconsolata,monospace"}}>{log.length}</span></div>
+                    <div className="log-sum-row" style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:"0.85rem",borderBottom:"1px solid var(--border)"}}><span>Total Containers</span><span style={{fontFamily:"Inconsolata,monospace"}}>{logContainers}</span></div>
+                    <div className="log-sum-row" style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:"0.85rem",borderBottom:"1px solid var(--border)"}}><span>Total Revenue</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--green)"}}>{fmt(log.reduce((s,r)=>s+(r.revenue||0),0))}</span></div>
+                    <div className="log-sum-row" style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:"0.85rem",borderBottom:"1px solid var(--border)"}}><span>Total Tips</span><span style={{fontFamily:"Inconsolata,monospace",color:"var(--purple)"}}>{fmt(logTips)}</span></div>
+                    <div className="log-sum-row" style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:"0.85rem",fontWeight:600,color:"var(--accent)"}}><span>Session Total</span><span style={{fontFamily:"Inconsolata,monospace"}}>{fmt(logTotal)}</span></div>
+                  </>
+                }
+                <div style={{marginTop:12}}>
+                  <a href={`https://docs.google.com/spreadsheets/d/${SHEET_ID}`} target="_blank" rel="noreferrer"
+                    style={{fontSize:"0.8rem",color:"var(--accent2)",fontFamily:"Inconsolata,monospace",textDecoration:"none"}}>
+                    📊 See full history in Google Sheet →
+                  </a>
+                </div>
+              </div>
             </>
           )}
 
